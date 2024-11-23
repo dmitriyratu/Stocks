@@ -2,51 +2,34 @@ import requests
 import os
 from dotenv import load_dotenv
 import datetime
+import pandas as pd
+
+pd.set_option('display.max_columns', None)
 
 # # Setup
 
+# +
 load_dotenv()
 API_KEY = os.getenv("NEWS_API_KEY")
 
-# +
-today = datetime.datetime.now()
-yesterday = today - datetime.timedelta(days=1)
-
-query = "bitcoin"
-
-url = f"https://newsapi.org/v2/everything?q={query}&from={from_date}&to={to_date}&sortBy=publishedAt&apiKey={api_key}"
-
-print(url)
+BASE_URL = "https://api.goperigon.com/v1/all"
 # -
 
-# # Import Data
-
-response = requests.get(url)
-news_data = response.json()
-
-
-news_data
+# # Search and Import News
 
 # +
+today = datetime.datetime.now()
 
-# Extract headlines
-headlines = [article['title'] for article in news_data['articles']]
-
-
-# +
-BASE_URL = "https://api.goperigon.com/v1/all"
-
+to_date = today.strftime('%Y-%m-%d')
 from_date = (today - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-to_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
-# Parameters for the request
 params = {
     "apiKey": API_KEY,
     "q": "bitcoin", 
     "from": from_date,
     "to": to_date,
     "sortBy": "date",
-    # "source": "cnn.com",  # (Optional) Filter by specific source
+    # "source": "cnn.com",
     "language": 'en',
     "fullText": "true",
 }
@@ -56,13 +39,28 @@ resp_json = resp.json()
 
 print(f"Result count: {resp_json['numResults']}")
 # -
+# # Table Creation
+
+# +
+lst = [
+    {
+        (fld:='source'): article.get(fld, {}).get('domain') or None,
+        (fld:='medium'): article.get(fld) or None,
+        (fld:='title'): article.get(fld) or None,
+        (fld:='summary'): article.get(fld) or None,
+        (fld:='sentiment'): article.get(fld) or None
+    }
+    for article in resp_json.get('articles', [])
+]
+
+df = pd.DataFrame(lst)
+# -
+
+# # Clean Table
+
+df.fillna('Unknown', inplace=True)
+df.drop_duplicates(subset=['title', 'summary'], inplace=True)
 
 
 
-[i['source']['domain'] for i in resp_json['articles']]
 
-[i['title'] for i in resp.json()['articles']]
-
-{i:resp_json['articles'][0][i] for i in ['medium','title','summary','sentiment']}
-
-resp_json['articles'][0]
