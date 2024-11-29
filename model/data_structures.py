@@ -44,6 +44,7 @@ class ImpactAssessment:
 class ArticleAnalysis:
     sentiment: SentimentAnalysis
     impact: ImpactAssessment
+    reasoning: str
 
 
 # -
