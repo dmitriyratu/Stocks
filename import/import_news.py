@@ -1,161 +1,105 @@
-from dotenv import load_dotenv
-import pandas as pd
-import requests
-from datetime import datetime, timedelta
 import os
-import time
-import json
-from typing import List, Dict, Optional
+from transformers import pipeline
+from textblob import TextBlob
+from newspaper import Article
+
 
 load_dotenv()
+
+API_KEY = os.getenv("NEWS_API_KEY")
+BASE_URL = "https://cryptonews-api.com/api/v1"
 
 
 # # Search and Import News
 
-# +
-class NewsAPICryptoFetcher:
-    def __init__(self, api_key):
-       
-        self.api_key = api_key
-        self.base_url = 'https://newsapi.org/v2/everything'
-        
-        self.headers = {
-            "X-Api-Key": self.api_key,
-            "User-Agent": "CryptoNewsCollector/1.0"
-        }
-    
-    def fetch_articles(
-        self,
-        query: str = "bitcoin OR cryptocurrency OR crypto",
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        language: str = "en",
-        sort_by: str = "publishedAt",
-        page_size: int = 100
-    ) -> List[Dict]:
-        """
-        Fetch articles from NewsAPI with pagination handling.
-        
-        Args:
-            query: Search query (default: major crypto terms)
-            from_date: Start date in 'YYYY-MM-DD' format
-            to_date: End date in 'YYYY-MM-DD' format
-            language: Article language (default: English)
-            sort_by: Sorting method (relevancy, popularity, publishedAt)
-            page_size: Articles per request (max 100)
-        """
-        all_articles = []
-        page = 1
-        
-        while True:
-            params = {
-                "q": query,
-                "language": language,
-                "sortBy": sort_by,
-                "pageSize": page_size,
-                "page": page
-            }
-            
-            if from_date:
-                params["from"] = from_date
-            if to_date:
-                params["to"] = to_date
-                
-            try:
-                response = requests.get(
-                    self.base_url,
-                    headers=self.headers,
-                    params=params
-                )
-                response.raise_for_status()
-                data = response.json()
+def fetch_crypto_news(start_date, end_date):
+    url = f"{BASE_URL}"
+    params = {
+        "token": API_KEY,
+        "date": '-'.join([pd.Timestamp(dt).strftime('%d%m%Y') for dt in [start_date,end_date]]),
+        "tickers": "BTC", 
+        'items':3,
+        "page":1,
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json().get("data", [])
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+        return []
 
-                return data
-                
-                if not data.get("articles"):
-                    break
-                    
-                # Process articles and extract relevant information
-                for article in data["articles"]:
-                    processed_article = {
-                        "title": article.get("title"),
-                        "description": article.get("description"),
-                        "content": article.get("content"),
-                        "published_at": article.get("publishedAt"),
-                        "source_name": article.get("source", {}).get("name"),
-                        "url": article.get("url")
-                    }
-                    all_articles.append(processed_article)
-                
-                # Check if we've reached the end
-                if page * page_size >= data["totalResults"]:
-                    break
-                    
-                page += 1
-                # Respect rate limits
-                time.sleep(0.5)
-                
-            except requests.exceptions.RequestException as e:
-                print(f"Error fetching data: {e}")
-                break
-                
-        return all_articles
+
+news = fetch_crypto_news(
+    start_date = "2021-01-01",
+    end_date = "2021-01-02",
+)
+
+news[1]
+
+# +
+summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=0)
+
+def extract_article_details(url):
+    """
+    Extract details from a news article URL and always generate a summary using transformers.
     
-    def save_articles(self, articles: List[Dict], filename: str):
-        """Save articles to CSV or JSON file."""
-        if filename.endswith('.csv'):
-            df = pd.DataFrame(articles)
-            df.to_csv(filename, index=False)
-        else:
-            with open(filename, 'w') as f:
-                json.dump(articles, f, indent=2)
+    Args:
+        url (str): URL of the news article.
+        max_length (int): Maximum length of the transformer-generated summary.
+        min_length (int): Minimum length of the transformer-generated summary.
+
+    Returns:
+        dict: Dictionary containing article details (text, title, author, publish date, and summary).
+    """
     
-    def get_date_batches(self, start_date: str, end_date: str, batch_days: int = 30) -> List[tuple]:
-        """
-        Split date range into batches to handle API limitations.
-        Returns list of (start_date, end_date) tuples.
-        """
-        start = datetime.strptime(start_date, "%Y-%m-%d")
-        end = datetime.strptime(end_date, "%Y-%m-%d")
-        batches = []
+    # Initialize the Article object
+    article = Article(url)
+
+    # Download and parse the article
+    article.download()
+    article.parse()
+    
+    # Extract details
+    article_details = {
+        "title": article.title,
+        "text": article.text,
+        "authors": article.authors,
+        "publish_date": article.publish_date,
+        "url": url
+    }
+
+    # Generate a summary using transformer-based summarization
+    if len(TextBlob(article.text).words) > 50:
+        transformer_summary = summarizer(
+            article.text,
+            max_length=250,
+            min_length=100,
+            do_sample=False
+        )
+        article_details["description"] = transformer_summary[0]['summary_text']
+    elif len(TextBlob(article.text).words) > 25:
+        article_details["description"] = article.text
+    else:
+        article_details["description"] = None
         
-        current = start
-        while current < end:
-            batch_end = min(current + timedelta(days=batch_days), end)
-            batches.append((
-                current.strftime("%Y-%m-%d"),
-                batch_end.strftime("%Y-%m-%d")
-            ))
-            current = batch_end
-            
-        return batches
+    return article_details
+# -
 
 
 
 # +
-API_KEY = os.getenv("NEWS_API_KEY")
-fetcher = NewsAPICryptoFetcher(API_KEY)
+# Example usage
+example_url = 'https://coingape.com/bitcoin-price-holds-in-consolidation-ahead-of-the-anticipated-liftoff-to-40000/'
+article_details = extract_article_details(example_url)
 
-# Example: Fetch last month's articles
-start_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-end_date = datetime.now().strftime("%Y-%m-%d")
-
-# Get date batches to handle API limitations
-batches = fetcher.get_date_batches(start_date, end_date)
-
-all_articles = []
-for batch_start, batch_end in batches:
-    print(f"Fetching articles from {batch_start} to {batch_end}")
-    articles = fetcher.fetch_articles(
-        from_date=batch_start,
-        to_date=batch_end,
-        query="bitcoin OR cryptocurrency OR crypto"
-    )
-    all_articles.extend(articles)
-
-# Save to both formats
-fetcher.save_articles(all_articles, "crypto_news.csv")
-fetcher.save_articles(all_articles, "crypto_news.json")
+# Display results
+if "error" in article_details:
+    print(f"Failed to extract article: {article_details['error']}")
+else:
+    print(f"Title: {article_details['title']}")
+    print(f"Authors: {article_details['authors']}")
+    print(f"Publish Date: {article_details['publish_date']}")
+    print(f"Summary: {article_details.get('description', 'No summary available')}")
 # -
 
 
@@ -184,4 +128,5 @@ df.drop_duplicates(subset=['title', 'summary'], inplace=True)
 
 
 
+pip install transformers
 

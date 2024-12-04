@@ -8,17 +8,16 @@ from tqdm.autonotebook import tqdm
 
 
 class GetCryptoPrices:
+
+    TICKERS = [
+        "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "DOGE-USD",
+        "ADA-USD", "TON-USD", "AVAX-USD", "DOT-USD", "LINK-USD",
+        "BTC-USD"
+    ]
+
+    TIME_WINDOW_DAYS = 365 * 2
     
     def __init__(self):
-  
-        self.TICKERS = [
-            "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "DOGE-USD",
-            "ADA-USD", "TON-USD", "AVAX-USD", "DOT-USD", "LINK-USD",
-            "BTC-USD"
-        ]
-        
-
-        self.TIME_WINDOW_DAYS = 365 * 2
         
         self.data_dir = Path("../data/crypto_prices")
         self.data_dir.mkdir(parents=True, exist_ok=True)
