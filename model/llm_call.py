@@ -4,10 +4,10 @@ import os
 from openai import OpenAI
 import pandas as pd
 import json
+from typing import List
 
 from model.utils.utils_gpt import MessageCreator
 import model.data_structures as ds
-from typing import List
 # -
 
 # # Setup
@@ -31,8 +31,7 @@ class LLMClient():
     def _call_gpt(self, message: list) -> dict:
         """Sends a message to ChatGPT and retrieves the JSON response."""
         try:
-            
-            # Make the API call
+
             completion = self.client.chat.completions.create(
                 model=self.config.model_name,
                 messages=message,
@@ -41,21 +40,18 @@ class LLMClient():
                 timeout=self.config.timeout_seconds
             )
 
-            choice: Choice = completion.choices[0]
+            choice = completion.choices[0]
             response_content = choice.message.content         
             
             if not response_content:
                 raise ValueError("Empty response from API")
             
-            return json.loads(response_content)
+            return response_content
         
         except (KeyError, json.JSONDecodeError) as e:
             raise KeyError(f"Invalid response format: {str(e)}")
 
     def analyze_article(self, title:str, summary:str, subjects:List[str]) -> ds.ArticleAnalysis:
-        
-        if pd.isna([title,summary]).any():
-            raise ValueError("Title and summary must not be empty")
         
         message = MessageCreator.create_message(
             title = title,
@@ -64,8 +60,6 @@ class LLMClient():
         )
         
         response = self._call_gpt(message)
-
-        return response
         
         analysis = MessageCreator.parse_response(response)
 
@@ -82,20 +76,27 @@ config = ds.LLMConfig(
     timeout_seconds=30,
 )
 
-client = LLMClient(config)
+client_cls = LLMClient(config)
 # -
 
-analysis = client.analyze_article(
-    title="Bitcoin Hits New High",
-    summary="Major institutions and businesses are increasingly adopting Bitcoin for payments and investment.",
-    subjects=["cryptocurrency", "bitcoin", "finance"]
+title="New song from Dmitriy Ratushny about bitcoin"
+summary="Dmitriy Ratushny says to buy bitcoin with a strong emphasis on purchases, has not made a lot of money on crypto himself"
+subjects=["cryptocurrency", "bitcoin", "finance"]
+
+analysis = client_cls.analyze_article(
+    title=title,
+    summary=summary,
+    subjects=subjects,
 )
 
-analysis
-
 # +
-# "Bitcoin Hits New High"
-# "Major institutions and businesses are increasingly adopting Bitcoin for payments and investment."
+from pprint import pprint
+
+pprint(vars(analysis), width=100)
 # -
+
+
+
+
 
 

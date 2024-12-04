@@ -1,7 +1,38 @@
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from textblob import TextBlob
 
+
+# # News Data Structures
+
+# ## Article Validator
+
+class Article(BaseModel):
+    title: str = Field(..., description="Title of the article")
+    summary: str = Field(..., description="Summary of the article")
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_word_counts(cls, values):
+        """Validates word counts for title and summary."""
+        title = values.get("title", "")
+        summary = values.get("summary", "")
+
+        def word_count(text):
+            return len(TextBlob(text).words)
+
+        if word_count(title) < 3:
+            raise ValueError(f"Title must have at least 2 words. Given: '{title}'")
+
+        if word_count(summary) < 20:
+            raise ValueError(f"Summary must have at least 15 words. Given: '{summary}'")
+
+        return values
+
+
+# ## Article Output Categories
 
 # +
 class EmotionCategory(Enum):
@@ -27,7 +58,6 @@ class Timeframe(Enum):
     LONG_TERM = "long-term"
 
 
-
 # +
 @dataclass
 class SentimentAnalysis:
@@ -38,16 +68,22 @@ class SentimentAnalysis:
 @dataclass
 class ImpactAssessment:
     impact_likelihood: ImpactLikelihood 
-    timeframe_of_impact: Timeframe 
+    timeframe_of_impact: Timeframe
+
+@dataclass
+class FreeText:
+    llm_reasoning: str 
 
 @dataclass
 class ArticleAnalysis:
     sentiment: SentimentAnalysis
     impact: ImpactAssessment
-    reasoning: str
+    free_text: FreeText
 
 
 # -
+# # LLM Data Structure
+
 @dataclass
 class LLMConfig:
     model_name: str

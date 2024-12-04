@@ -28,12 +28,14 @@ class MessageCreator:
 
         return f"""
         1. Sentiment Analysis:
-           - Sentiment Score: A float value between {-1.0} (very negative) and {1.0} (very positive).
-           - Emotion Category: One of the following: {MessageCreator._format_enum_options(ds.EmotionCategory)}.
-           - Bullish or Bearish: Indicate whether the text suggests: {MessageCreator._format_enum_options(ds.BullishBearish)}.
+            - Sentiment Score: A float value between {-1.0} (very negative) and {1.0} (very positive).
+            - Emotion Category: One of the following: {MessageCreator._format_enum_options(ds.EmotionCategory)}.
+            - Bullish or Bearish: Indicate whether the text suggests: {MessageCreator._format_enum_options(ds.BullishBearish)}.
         2. Impact Assessment:
-           - Impact Likelihood: {MessageCreator._format_enum_options(ds.ImpactLikelihood)} likelihood of this article affecting Bitcoin prices.
-           - Timeframe of Impact: {MessageCreator._format_enum_options(ds.Timeframe)}."""
+            - Impact Likelihood: {MessageCreator._format_enum_options(ds.ImpactLikelihood)} likelihood of this article affecting Bitcoin prices.
+            - Timeframe of Impact: {MessageCreator._format_enum_options(ds.Timeframe)}.
+        3. Reasoning: No more than 3 sentence summary of explanation of your reasoning.
+        """
 
     @staticmethod
     def _create_json_template() -> str:
@@ -43,7 +45,8 @@ class MessageCreator:
             "emotion_category": f"<{' | '.join(item.value for item in ds.EmotionCategory)}>",
             "bullish_bearish": f"<{' | '.join(item.value for item in ds.BullishBearish)}>",
             "impact_likelihood": f"<{' | '.join(item.value for item in ds.ImpactLikelihood)}>",
-            "timeframe_of_impact": f"<{' | '.join(item.value for item in ds.Timeframe)}>"
+            "timeframe_of_impact": f"<{' | '.join(item.value for item in ds.Timeframe)}>",
+            "llm_reasoning": "<str>"
         }
         return json.dumps(template_dict, indent=2)
 
@@ -59,7 +62,8 @@ class MessageCreator:
         
         Provide the following details:{cls._create_analysis_requirements()}
         
-        Provide the response in the following structured JSON format:
+        Provide the response in the following structured JSON format, without any Markdown or code block formatting:
+
         {cls._create_json_template()}
         """
 
@@ -86,8 +90,16 @@ class MessageCreator:
                 impact_likelihood=ds.ImpactLikelihood(data['impact_likelihood']),
                 timeframe_of_impact=ds.Timeframe(data['timeframe_of_impact'])
             )
+
+            free_text = ds.FreeText(
+                llm_reasoning = data['llm_reasoning']
+            )
             
-            return ds.ArticleAnalysis(sentiment=sentiment, impact=impact)
+            return ds.ArticleAnalysis(
+                sentiment=sentiment, 
+                impact=impact,
+                free_text = free_text
+            )
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             raise ValueError(f"Invalid response format: {str(e)}")
