@@ -1,8 +1,8 @@
 import os
-from transformers import pipeline
-from textblob import TextBlob
-from newspaper import Article
 
+from newspaper import Article
+from textblob import TextBlob
+from transformers import pipeline
 
 load_dotenv()
 

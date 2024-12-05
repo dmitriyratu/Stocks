@@ -1,8 +1,9 @@
-import requests
-import os
-from dotenv import load_dotenv
 import datetime
+import os
+
 import pandas as pd
+import requests
+from dotenv import load_dotenv
 
 pd.set_option('display.max_columns', None)
 

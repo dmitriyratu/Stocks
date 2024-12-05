@@ -7,31 +7,6 @@ from textblob import TextBlob
 
 # # News Data Structures
 
-# ## Article Validator
-
-class Article(BaseModel):
-    title: str = Field(..., description="Title of the article")
-    summary: str = Field(..., description="Summary of the article")
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_word_counts(cls, values):
-        """Validates word counts for title and summary."""
-        title = values.get("title", "")
-        summary = values.get("summary", "")
-
-        def word_count(text):
-            return len(TextBlob(text).words)
-
-        if word_count(title) < 3:
-            raise ValueError(f"Title must have at least 2 words. Given: '{title}'")
-
-        if word_count(summary) < 20:
-            raise ValueError(f"Summary must have at least 15 words. Given: '{summary}'")
-
-        return values
-
-
 # ## Article Output Categories
 
 # +
@@ -90,4 +65,3 @@ class LLMConfig:
     temperature: float
     max_tokens: Optional[int]
     timeout_seconds: int
-

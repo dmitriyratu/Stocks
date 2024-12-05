@@ -43,14 +43,14 @@ class CryptoNewsFetcher:
         
         try:
             all_news = []
-            full_request = requests.get(self.base_url, params=params).json()
+            response = requests.get(self.base_url, params=params).json()
             
-            pages = range(1, full_request.get("total_pages", 1) + 1)
+            pages = range(1, response.get("total_pages", 1) + 1)
             for page in tqdm(pages, desc="Fetching news"):
                 if page > 1:
                     params['page'] = page
-                    full_request = requests.get(self.base_url, params=params).json()
-                data = full_request.get("data", [])
+                    response = requests.get(self.base_url, params=params).json()
+                data = response.get("data", [])
                 if not data:
                     break
                 all_news.extend(data)
@@ -72,7 +72,6 @@ news = fetcher.fetch_news("2021-01-01", "2021-01-04")
 
 
 
-response.json().keys()
 
 
 def _get_total_pages(self, params):
@@ -167,13 +166,11 @@ def extract_article_details(url):
     return article_details
 
 
-# +
+# -
+
 # Example usage
 example_url = 'https://decrypt.co/52971/bitcoin-exceeds-30k-to-hit-yes-another-all-time-high'
 article_details = extract_article_details(example_url)
-
-
-# -
 article_details
 
 # Display results
