@@ -1,11 +1,15 @@
+# +
 import pandas as pd
 import os
 import yfinance as yf
 from datetime import datetime, timedelta
-from logger_config import setup_logger
 from pathlib import Path
 from tqdm.autonotebook import tqdm
 
+from logger_config import setup_logger
+
+
+# -
 
 class GetCryptoPrices:
 
