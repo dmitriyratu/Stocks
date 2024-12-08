@@ -1,6 +1,7 @@
 import os
 import site
 
+
 def add_current_dir_to_site_packages():
     """
     Automatically add the current script's directory to Python's site-packages
@@ -25,6 +26,7 @@ def add_current_dir_to_site_packages():
         print(f"Successfully added {current_dir} to {pth_file}")
     except Exception as e:
         print(f"Failed to create .pth file: {e}")
+
 
 # Example usage
 if __name__ == "__main__":

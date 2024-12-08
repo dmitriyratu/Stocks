@@ -1,17 +1,18 @@
 import logging
-from tqdm.contrib.logging import logging_redirect_tqdm
 import sys
+
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 
 def setup_logger(name, log_file, level=logging.INFO):
     """
     Set up a logger with the specified name and integrate it with tqdm automatically.
-    
+
     Args:
         name (str): Name of the logger.
         log_file (Path): Path object for the log file.
         level (int): Logging level (e.g., logging.INFO, logging.DEBUG).
-        
+
     Returns:
         logging.Logger: Configured logger instance.
     """
@@ -20,7 +21,7 @@ def setup_logger(name, log_file, level=logging.INFO):
 
     if not logger.handlers:
         logger.setLevel(level)
-        
+
         # Formatter for log messages
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -40,7 +41,5 @@ def setup_logger(name, log_file, level=logging.INFO):
 
     # Prevent logs from propagating to the root logger
     logger.propagate = False
-    
+
     return logger
-
-

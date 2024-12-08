@@ -1,21 +1,24 @@
 # # Import
 
 # +
-from typing import List, Dict
 import json
+from typing import Dict, List
 
-import model.data_structures as ds
-
+import dataclass.data_structures as ds
 
 # -
 
 # # Message Creation Center
 
+
 class MessageCreator:
     """Handles creation and formatting of GPT messages for Bitcoin article analysis."""
-    
-    SYSTEM_PROMPT = "You are a financial sentiment analyst. Your role is to analyze crypto-related " \
-    "articles and provide a structured assessment of their potential impact on crypto prices with emphasis on shorter term."
+
+    SYSTEM_PROMPT = (
+        "You are a financial sentiment analyst. Your role is to analyze crypto-related "
+        "articles and provide a structured assessment of their potential impact on crypto prices "
+        "with emphasis on shorter term."
+    )
 
     @staticmethod
     def _format_enum_options(enum_class: type) -> str:
@@ -23,17 +26,23 @@ class MessageCreator:
         return ", ".join(item.value for item in enum_class)
 
     @staticmethod
-    def _create_analysis_requirements() -> str:
+    def create_analysis_requirements() -> str:
         """Creates the analysis requirements section of the prompt."""
+
+        sentiment_range = f"{-1.0} (very negative) and {1.0} (very positive)"
+        emotions = MessageCreator._format_enum_options(ds.EmotionCategory)
+        bull_bear = MessageCreator._format_enum_options(ds.BullishBearish)
+        likelihood = MessageCreator._format_enum_options(ds.ImpactLikelihood)
+        timeframe = MessageCreator._format_enum_options(ds.Timeframe)
 
         return f"""
         1. Sentiment Analysis:
-            - Sentiment Score: A float value between {-1.0} (very negative) and {1.0} (very positive).
-            - Emotion Category: One of the following: {MessageCreator._format_enum_options(ds.EmotionCategory)}.
-            - Bullish or Bearish: Indicate whether the text suggests: {MessageCreator._format_enum_options(ds.BullishBearish)}.
+            - Sentiment Score: A float value between {sentiment_range}.
+            - Emotion Category: One of the following: {emotions}.
+            - Bullish or Bearish: Indicate whether the text suggests: {bull_bear}.
         2. Impact Assessment:
-            - Impact Likelihood: {MessageCreator._format_enum_options(ds.ImpactLikelihood)} likelihood of this article affecting Bitcoin prices.
-            - Timeframe of Impact: {MessageCreator._format_enum_options(ds.Timeframe)}.
+            - Impact Likelihood: {likelihood} likelihood of this article affecting Bitcoin prices.
+            - Timeframe of Impact: {timeframe}.
         3. Reasoning: No more than 3 sentence summary of explanation of your reasoning.
         """
 
@@ -46,7 +55,7 @@ class MessageCreator:
             "bullish_bearish": f"<{' | '.join(item.value for item in ds.BullishBearish)}>",
             "impact_likelihood": f"<{' | '.join(item.value for item in ds.ImpactLikelihood)}>",
             "timeframe_of_impact": f"<{' | '.join(item.value for item in ds.Timeframe)}>",
-            "llm_reasoning": "<str>"
+            "llm_reasoning": "<str>",
         }
         return json.dumps(template_dict, indent=2)
 
@@ -55,21 +64,22 @@ class MessageCreator:
         """
         Creates a message for GPT to analyze Bitcoin-related articles.
         """
-        
-        user_content = f"""Analyze the following articles about {', '.join(subjects)}:             
+
+        user_content = f"""Analyze the following articles about {', '.join(subjects)}:
         Title: {title}
         Summary: {summary}
         
         Provide the following details:{cls._create_analysis_requirements()}
         
-        Provide the response in the following structured JSON format, without any Markdown or code block formatting:
+        Provide the response in the following structured JSON format,
+        without any Markdown or code block formatting:
 
         {cls._create_json_template()}
         """
 
         return [
             {"role": "system", "content": cls.SYSTEM_PROMPT},
-            {"role": "user", "content": user_content}
+            {"role": "user", "content": user_content},
         ]
 
     @staticmethod
@@ -79,27 +89,21 @@ class MessageCreator:
         """
         try:
             data = json.loads(response_json)
-            
+
             sentiment = ds.SentimentAnalysis(
-                sentiment_score=float(data['sentiment_score']),
-                emotion_category=ds.EmotionCategory(data['emotion_category']),
-                bullish_bearish=ds.BullishBearish(data['bullish_bearish'])
-            )
-            
-            impact = ds.ImpactAssessment(
-                impact_likelihood=ds.ImpactLikelihood(data['impact_likelihood']),
-                timeframe_of_impact=ds.Timeframe(data['timeframe_of_impact'])
+                sentiment_score=float(data["sentiment_score"]),
+                emotion_category=ds.EmotionCategory(data["emotion_category"]),
+                bullish_bearish=ds.BullishBearish(data["bullish_bearish"]),
             )
 
-            free_text = ds.FreeText(
-                llm_reasoning = data['llm_reasoning']
+            impact = ds.ImpactAssessment(
+                impact_likelihood=ds.ImpactLikelihood(data["impact_likelihood"]),
+                timeframe_of_impact=ds.Timeframe(data["timeframe_of_impact"]),
             )
-            
-            return ds.ArticleAnalysis(
-                sentiment=sentiment, 
-                impact=impact,
-                free_text = free_text
-            )
-            
+
+            free_text = ds.FreeText(llm_reasoning=data["llm_reasoning"])
+
+            return ds.ArticleAnalysis(sentiment=sentiment, impact=impact, free_text=free_text)
+
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             raise ValueError(f"Invalid response format: {str(e)}")

@@ -1,0 +1,9 @@
+pandas==2.2.3
+python-dotenv==1.0.1
+tqdm==4.67.1
+newspaper3k==0.2.8
+lxml_html_clean==0.4.1
+textblob==0.18.0.post0
+transformers==4.47.0
+ipywidgets==8.1.5
+torch-directml==0.2.5.dev240914
