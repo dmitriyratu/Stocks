@@ -4,24 +4,34 @@ import pandas as pd
 import requests
 from tqdm.autonotebook import tqdm
 import time
+from logger_config import setup_logger
+from pathlib import Path
+import pyprojroot
 
 load_dotenv()
+
+log_file = pyprojroot.here() / Path("logs/crypto_news.log")
+logger = setup_logger("GetCryptoNews", log_file)
 
 # # Import News URL's
 
 
 class CryptoNewsFetcher:
-    def __init__(self, logger):
+    def __init__(self):
         
         self.api_key = os.getenv("CRYPTO_NEWS_API_KEY")
         self.base_url = os.getenv("CRYPTO_NEWS_BASE_URL")
-        self.logger = logger
 
     def _post_process_news(self,news):
             
         news_df = pd.DataFrame(news)
 
-        news_df['date'] = pd.to_datetime(news_df['date']).dt.tz_convert('UTC').dt.tz_localize(None)
+        news_df['date_utc'] = pd.to_datetime(news_df['date']).dt.tz_convert('UTC').dt.tz_localize(None)
+        
+        news_df['year_utc'] = news_df['date_utc'].dt.year
+        news_df['month_utc'] = news_df['date_utc'].dt.month
+        news_df['day_utc'] = news_df['date_utc'].dt.day
+
 
         news_df.rename(columns = {
             'text':'text_preview',
@@ -33,9 +43,8 @@ class CryptoNewsFetcher:
         })
 
         columns = [
-            'news_id', 'date', 'type', 'source_name', 'tickers',
-            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 
-            'title', 'text_preview'
+            'news_id', 'date', 'date_utc', 'year_utc', 'month_utc', 'day_utc', 'type', 'source_name', 'tickers',
+            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title', 'text_preview'
         ]        
 
         return news_df[columns]
@@ -71,12 +80,12 @@ class CryptoNewsFetcher:
                 news.extend(data)
                 time.sleep(0.5)
 
-            self.logger.info(f"Fetched {len(news)} articles")
+            logger.info(f"Fetched {len(news)} articles")
 
             news_df = self._post_process_news(news)
 
             return news_df
 
         except Exception as e:
-            self.logger.error(f"Error: {str(e)}")
+            logger.error(f"Error: {str(e)}")
             raise ValueError(e)        

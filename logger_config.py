@@ -36,8 +36,8 @@ def setup_logger(name, log_file, level=logging.INFO):
         tqdm_handler.setFormatter(formatter)
         logger.addHandler(tqdm_handler)
 
-    # Apply logging redirection automatically
-    logging_redirect_tqdm(logger)
+        # Apply logging redirection automatically
+        logging_redirect_tqdm(logger)
 
     # Prevent logs from propagating to the root logger
     logger.propagate = False

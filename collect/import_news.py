@@ -2,14 +2,18 @@ from pathlib import Path
 from transformers import pipeline
 import torch_directml
 from dotenv import load_dotenv
-from logger_config import setup_logger
 from pandarallel import pandarallel
 import pandas as pd
 import os
-from webdriver_manager.chrome import ChromeDriverManager
+from logger_config import setup_logger
+import os
+
 
 
 from collect.utils.utils_news_fetcher import CryptoNewsFetcher
+from collect.utils.utils_url_scraper import PowerScraper
+from collect.utils.utils_news_persist import persist_news
+
 
 # # Configuration
 
@@ -17,52 +21,58 @@ load_dotenv()
 pandarallel.initialize(nb_workers= os.cpu_count() - 1, verbose = 0)
 
 
-log_file = Path("../logs/crypto_news.log")
-logger = setup_logger("GetCryptoNews", log_file)
-
 # # Import News URL's
 
 
-fetcher = CryptoNewsFetcher(logger)
+fetcher = CryptoNewsFetcher()
 
-news_df = fetcher.fetch_news("2021-01-01", "2021-01-02")
+news_df = fetcher.fetch_news(
+    pd.Timestamp("2021-01-01"), 
+    pd.Timestamp("2021-01-01") + pd.offsets.MonthEnd(0)
+)
+
+persist_news(news_df)
 
 
+
+
+
+
+
+news_df.to_parquet(
+    '../data/news/crypto_news/', 
+    partition_cols=['year_utc', 'month_utc'], 
+    existing_data_behavior='append'
+)
+
+news_df[news_df['date_month'] == 2]
+
+scraper = PowerScraper()
 
 # +
 # %%time
+try:
+    
+    scraper = PowerScraper()
+        
+    lst = []
+    for url in news_df['news_url']:
+        print(url)
+        lst.append(scraper.scrape(url))
+    
+    output = pd.DataFrame(lst, columns = ['full_text', 'scrapper','duration'])
 
-scraper = ContentScraper(logger = logger)
-
-news_df[['scraper', 'text']] = pd.DataFrame(
-    news_df['news_url']
-    .parallel_apply(scraper.get_article_content)
-    .tolist()
-)
-# +
-mask = news_df['text'].isna()
-news_df.loc[mask, ['scraper', 'text']] = pd.DataFrame(
-    news_df['news_url'][mask].apply(scraper.get_article_content).tolist()
-)
-
-scraper.close_driver()
+finally:
+    scraper.close()
 # -
 
 
 
 
-from collect.utils.test import PowerScraper
 
-scraper = PowerScraper()
+output.groupby('scrapper')['duration'].describe()
 
-# %%time
-output = news_df['news_url'].apply(scraper.scrape)
-
-pd.DataFrame([i for i in output])
-
-
-
-
+output.groupby('scrapper')['duration'].sum()
 
 
 
