@@ -13,7 +13,7 @@ load_dotenv()
 log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("GetCryptoNews", log_file)
 
-# # Import News URL's
+# # Import News
 
 
 class CryptoNewsFetcher:

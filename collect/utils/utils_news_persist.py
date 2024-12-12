@@ -14,7 +14,7 @@ def persist_news(news_df: pd.DataFrame) -> None:
 
     logger.info(f"Starting to persist {news_df.shape[0]} news records")
 
-    base_path = Path('../data/news/crypto_news')
+    base_path = pyprojroot.here() / Path('data/news/crypto_news')
     
     pa_table = pa.Table.from_pandas(news_df)
     schema_dict = {field.name: field.type for field in pa_table.schema}
@@ -56,7 +56,7 @@ def persist_news(news_df: pd.DataFrame) -> None:
     )
     
     logger.info(f"Merge complete. Merge operation summary:")
-    logger.info(f"- New records inserted: {len(to_insert)}")
-    logger.info(f"- Existing records updated: {len(to_update)}")
-    if len(to_insert) > 0:
-        logger.info(f"- Sample new IDs: {list(to_insert)[:3]}")
+    logger.info(f"\t New records inserted: {len(to_insert)}")
+    logger.info(f"\t Existing `news_id` records updated: {len(to_update)}")
+
+    return to_insert, to_update

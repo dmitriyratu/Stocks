@@ -7,18 +7,15 @@ import pandas as pd
 import os
 from logger_config import setup_logger
 import os
-
-
+import pyprojroot
 
 from collect.utils.utils_news_fetcher import CryptoNewsFetcher
 from collect.utils.utils_url_scraper import PowerScraper
 from collect.utils.utils_news_persist import persist_news
 
-
 # # Configuration
 
 load_dotenv()
-pandarallel.initialize(nb_workers= os.cpu_count() - 1, verbose = 0)
 
 
 # # Import News URL's
@@ -31,23 +28,21 @@ news_df = fetcher.fetch_news(
     pd.Timestamp("2021-01-01") + pd.offsets.MonthEnd(0)
 )
 
-persist_news(news_df)
+to_insert, to_update = persist_news(news_df)
 
 
 
-
-
-
-
-news_df.to_parquet(
-    '../data/news/crypto_news/', 
-    partition_cols=['year_utc', 'month_utc'], 
-    existing_data_behavior='append'
-)
-
-news_df[news_df['date_month'] == 2]
+df = pd.read_parquet(pyprojroot.here() / Path('data/news/crypto_news'))
 
 scraper = PowerScraper()
+
+
+
+
+# %%time
+df['news_url'].head(30).map(scraper.scrape)
+
+
 
 # +
 # %%time
