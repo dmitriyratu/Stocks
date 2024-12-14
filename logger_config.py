@@ -28,6 +28,7 @@ def setup_logger(name, log_file, level=logging.INFO):
         # File handler to write logs to a file
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 

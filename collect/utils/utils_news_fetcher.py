@@ -7,6 +7,7 @@ import time
 from logger_config import setup_logger
 from pathlib import Path
 import pyprojroot
+from textblob import TextBlob
 
 load_dotenv()
 
@@ -26,25 +27,29 @@ class CryptoNewsFetcher:
             
         news_df = pd.DataFrame(news)
 
+        news_df = news_df.rename(columns = {
+            'title':'title_text',
+            'text':'preview_text',
+            'sentiment':'news_api_sentiment',
+        })
+
+        news_df = news_df.astype({
+            'rank_score':float
+        })
+
+        news_df = news_df.drop_duplicates(subset = ['news_url'], ignore_index = True)
+
         news_df['date_utc'] = pd.to_datetime(news_df['date']).dt.tz_convert('UTC').dt.tz_localize(None)
         
         news_df['year_utc'] = news_df['date_utc'].dt.year
         news_df['month_utc'] = news_df['date_utc'].dt.month
         news_df['day_utc'] = news_df['date_utc'].dt.day
 
-
-        news_df.rename(columns = {
-            'text':'text_preview',
-            'sentiment':'news_api_sentiment',
-        }, inplace = True)
-
-        news_df = news_df.astype({
-            'rank_score':float
-        })
+        news_df['preview_text_size'] = news_df['preview_text'].map(lambda text: len(TextBlob(text).words))
 
         columns = [
             'news_id', 'date', 'date_utc', 'year_utc', 'month_utc', 'day_utc', 'type', 'source_name', 'tickers',
-            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title', 'text_preview'
+            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title_text', 'preview_text', 'preview_text_size'
         ]        
 
         return news_df[columns]

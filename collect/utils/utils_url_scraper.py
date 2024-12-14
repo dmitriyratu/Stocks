@@ -17,6 +17,10 @@ from contextlib import contextmanager
 import requests
 from pathlib import Path
 import pyprojroot
+import multiprocessing
+import dataclass.data_structures as ds
+from tqdm.notebook import tqdm
+from textblob import TextBlob
 
 log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("ScapeNewsURLs", log_file)
@@ -33,16 +37,36 @@ class WebDriverPool:
 
     def _create_driver(self, chrome_version: int):
         options = uc.ChromeOptions()
+        
+        # Basic required options
         options.add_argument('--headless=new')
         options.add_argument('--disable-gpu')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--disable-extensions')
+        
+        # Anti-detection options
         options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
-        options.add_argument('--log-level=3')
-
+        options.add_argument(f'--user-agent={UserAgent().random}')
+        options.add_argument('--enable-cookies')
+        options.add_argument('--enable-javascript')
+        options.add_argument('--start-maximized')
+        
         driver = uc.Chrome(version_main=chrome_version, options=options)
+        
+        # Set timeouts using centralized config
+        driver.set_page_load_timeout(ds.TimeoutConfig.PAGE_LOAD)
+        driver.set_script_timeout(ds.TimeoutConfig.SCRIPT)
+        driver.implicitly_wait(ds.TimeoutConfig.IMPLICIT_WAIT)
+        
+        driver.command_executor._conn.timeout = ds.TimeoutConfig.COMMAND
+        driver.command_executor._conn.read_timeout = ds.TimeoutConfig.COMMAND
+        
+        driver.execute_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
+        
         return driver
 
     def get_driver(self):
@@ -69,15 +93,23 @@ class WebDriverPool:
 
 class PowerScraper:
     """High-performance scraper with persistent reusable resources."""
-    TIMEOUT_SECONDS = 15
-    CONNECTION_TIMEOUT = 5
-    READ_TIMEOUT = 10
+
+    RETRY_PROMPTS = [
+        r"verifying you are human",
+        r"please verify you are a human",
+        r"captcha required",
+    ]
+
 
     def __init__(self):
         self.chrome_version = self.get_chrome_version()
+        self.driver_pool = WebDriverPool(
+            size = min(multiprocessing.cpu_count() * 2, 8), 
+            chrome_version=self.chrome_version
+        )
         self.scraper, self.headers = self.setup_cloudscraper()
-        self.driver_pool = WebDriverPool(size = 5, chrome_version=self.chrome_version)
 
+        
     def get_chrome_version(self) -> int:
         """Detect the installed Chrome version dynamically."""
         try:
@@ -98,10 +130,8 @@ class PowerScraper:
             logger.info(f'Using Web Chrome Version {version}') 
             return int(version)
 
-    
     def setup_cloudscraper(self) -> Tuple[cloudscraper.CloudScraper, dict]:
         """Set up Cloudscraper with connection pooling and dynamic headers."""
-
         scraper = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
@@ -110,11 +140,18 @@ class PowerScraper:
                 'desktop': True,
             },
         )
-        adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100)
+        adapter = requests.adapters.HTTPAdapter(pool_connections=self.driver_pool.size, pool_maxsize=self.driver_pool.size)
         scraper.mount('http://', adapter)
         scraper.mount('https://', adapter)
 
         headers = {
+            'User-Agent': UserAgent().random,
+            'sec-ch-ua': f'"Google Chrome";v="{self.chrome_version}"',
+            'sec-ch-ua-platform': 'Windows',
+            'sec-ch-ua-mobile': '?0',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'none',            
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Encoding': 'gzip, deflate',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -122,69 +159,67 @@ class PowerScraper:
             'Connection': 'keep-alive',
             'DNT': '1',
             'Upgrade-Insecure-Requests': '1',
-            'sec-ch-ua': f'"Google Chrome";v="{self.chrome_version}"',
-            'sec-ch-ua-platform': 'Windows',
-            'sec-ch-ua-mobile': '?0',
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'User-Agent': UserAgent().random,
         }
         return scraper, headers
 
-
-    def fetch_fast(self, url: str) -> Optional[str]:
-        """Quickly fetch content using Cloudscraper."""
+    def fetch(self, url: str, reliable: bool = False) -> Optional[str]:
+        """Fetch content using Cloudscraper or WebDriver."""
+        
         try:
-            response = self.scraper.get(url, headers=self.headers, timeout=(self.CONNECTION_TIMEOUT, self.READ_TIMEOUT))
-            if response.status_code == 200:
-                response.encoding = response.apparent_encoding
-                return response.text
-        except Exception as e:
-            logger.error(f"Cloudscraper error for {url}: {e}")
-        return None
-
-    def fetch_reliable(self, url: str) -> Optional[str]:
-        """Fetch content reliably using Selenium WebDriver."""
-        with self.driver_pool.driver_context() as driver:
-            try:
-                driver.get(url)
-                WebDriverWait(driver, self.TIMEOUT_SECONDS).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+            
+            text = None
+            if not reliable:
+                response = self.scraper.get(
+                    url, headers=self.headers, 
+                    timeout=(ds.TimeoutConfig.CONNECTION, ds.TimeoutConfig.READ)
                 )
-                return driver.page_source
-            except Exception as e:
-                logger.error(f"Selenium error for {url}: {e}")
+                if response.status_code == 200:
+                    response.encoding = response.apparent_encoding
+                    text = response.text
+            else:
+                with self.driver_pool.driver_context() as driver:
+                    driver.get(url)                 
+                    if any(rp in driver.page_source.lower() for rp in self.RETRY_PROMPTS):
+                        time.sleep(ds.TimeoutConfig.VERIFICATION_SLEEP)
+                        WebDriverWait(driver, ds.TimeoutConfig.VERIFICATION_WAIT).until(
+                            EC.presence_of_element_located((By.XPATH, '//body'))
+                        )
+                    text = driver.page_source
+                    if any(fp in text.lower() for fp in self.RETRY_PROMPTS):
+                        text = None
+
+            return text
+            
+        except Exception as e:
+            logger.debug(f"Fetch error for {url} (reliable={reliable}): {e}")
             return None
 
-    def scrape(self, url: str) -> Tuple[Optional[str], Optional[str], Optional[float]]:
-        """Smart scraping with Cloudscraper fallback to Selenium."""
-        try:
-            t0 = time.perf_counter()
-            content = self.fetch_fast(url)
-            if content:
-                return trafilatura.extract(content), "cloudscraper", time.perf_counter() - t0
 
-            t0 = time.perf_counter()
-            content = self.fetch_reliable(url)
-            if content:
-                return trafilatura.extract(content), "selenium", time.perf_counter() - t0
+    def scrape_url(self, url: str) -> Tuple[str, Optional[str], Optional[str], Optional[float]]:
+        """Smart scraping with fast method fallback to reliable method."""
+        for method, reliable in [("fast", False), ("reliable", True)]:
+            try:
+                t0 = time.perf_counter()
+                content = self.fetch(url, reliable=reliable)
+                elapsed_time = time.perf_counter() - t0
+                if content:
+                    text = trafilatura.extract(content)
+                    text_size = len(TextBlob(text).words)
+                    if text_size >= 25:
+                        return url, text, text_size, method, elapsed_time
+            except Exception as e:
+                logger.debug(f"Scraping error for {url} using {method}: {e}")
+    
+        return url, None, None, None, None
 
-        except Exception as e:
-            logger.error(f"Scraping error for {url}: {e}")
-        return None, None, None
+    def scrape_urls(self, urls: List[str]) -> List[Tuple[Optional[str], Optional[str], Optional[float]]]:
+        """Scrape multiple URLs in parallel with progress tracking."""
+        with ThreadPoolExecutor(max_workers=self.driver_pool.size) as executor:
+            return list(executor.map(self.scrape_url, urls))
 
+    def refresh_driver_pool(self):
+        """Refresh the WebDriver pool."""
+        self.driver_pool.cleanup()
+        self.driver_pool = WebDriverPool(size=self.driver_pool.size, chrome_version=self.chrome_version)        
     def close(self):
         self.driver_pool.cleanup()
-
-
-def parallel_scrape(urls: List[str], max_workers: int = 10) -> List[Tuple[Optional[str], Optional[str], Optional[float]]]:
-    """Scrape multiple URLs in parallel."""
-    scraper = PowerScraper()
-    try:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            return list(executor.map(scraper.scrape, urls))
-    finally:
-        scraper.close()
-
-
