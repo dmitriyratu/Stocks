@@ -21,6 +21,8 @@ import multiprocessing
 import dataclass.data_structures as ds
 from tqdm.notebook import tqdm
 from textblob import TextBlob
+import gc
+from config import constants
 
 log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("ScapeNewsURLs", log_file)
@@ -100,6 +102,11 @@ class PowerScraper:
         r"captcha required",
     ]
 
+    EXIT_PROMPTS = [
+        r"free subscription for",
+        r"page not found",
+        
+    ]
 
     def __init__(self):
         self.chrome_version = self.get_chrome_version()
@@ -188,6 +195,8 @@ class PowerScraper:
                     if any(fp in text.lower() for fp in self.RETRY_PROMPTS):
                         text = None
 
+            
+            
             return text
             
         except Exception as e:
@@ -203,10 +212,17 @@ class PowerScraper:
                 content = self.fetch(url, reliable=reliable)
                 elapsed_time = time.perf_counter() - t0
                 if content:
-                    text = trafilatura.extract(content)
+                    text = trafilatura.extract(
+                        content,
+                        include_comments=False,
+                        include_tables=False,
+                        include_links=False,
+                        no_fallback=False,
+                    )
                     text_size = len(TextBlob(text).words)
-                    if text_size >= 25:
-                        return url, text, text_size, method, elapsed_time
+                    if text_size >= constants.MINIMUM_ARTICLE_WORDS:
+                        if text_size >= 100 or all([p not in text.lower() for p in self.EXIT_PROMPTS]): 
+                            return url, text, text_size, method, elapsed_time
             except Exception as e:
                 logger.debug(f"Scraping error for {url} using {method}: {e}")
     
@@ -219,7 +235,10 @@ class PowerScraper:
 
     def refresh_driver_pool(self):
         """Refresh the WebDriver pool."""
+        gc.collect()
         self.driver_pool.cleanup()
-        self.driver_pool = WebDriverPool(size=self.driver_pool.size, chrome_version=self.chrome_version)        
+        self.driver_pool = WebDriverPool(size=self.driver_pool.size, chrome_version=self.chrome_version)
+        
     def close(self):
         self.driver_pool.cleanup()
+        gc.collect()

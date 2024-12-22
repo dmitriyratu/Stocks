@@ -10,19 +10,19 @@ log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("StoreCryptoNews", log_file)
 
 
-def persist_news(news_df: pd.DataFrame) -> None:
+def persist_news(news_df: pd.DataFrame, path:str) -> None:
     """
     Persist news data to Delta Lake format with upsert functionality.
     """
-    logger.info(f"Starting to persist {news_df.shape[0]} news records")
-    base_path = pyprojroot.here() / Path('data/news/crypto_news')
+    logger.info(f"Persisting {news_df.shape[0]} news records")
+    base_path = pyprojroot.here() / Path(path)
     str_path = str(base_path)
     
     if not (base_path / '_delta_log').exists():
         results = write_deltalake(
             table_or_uri=str_path,
             data=news_df,
-            partition_by=['year_utc', 'month_utc']
+            partition_by=['year_utc', 'month_utc', 'day_utc']
         )
         logger.info(f"New records inserted: {news_df.shape[0]}")
     else:

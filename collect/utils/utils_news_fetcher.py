@@ -18,12 +18,11 @@ logger = setup_logger("GetCryptoNews", log_file)
 
 
 class CryptoNewsFetcher:
-    def __init__(self):
-        
-        self.api_key = os.getenv("CRYPTO_NEWS_API_KEY")
-        self.base_url = os.getenv("CRYPTO_NEWS_BASE_URL")
 
-    def _post_process_news(self,news):
+    API_KEY = os.getenv("CRYPTO_NEWS_API_KEY")
+    BASE_URL = os.getenv("CRYPTO_NEWS_BASE_URL")
+        
+    def _post_process_news(self, news):
             
         news_df = pd.DataFrame(news)
 
@@ -39,7 +38,13 @@ class CryptoNewsFetcher:
 
         news_df = news_df.drop_duplicates(subset = ['news_url'], ignore_index = True)
 
-        news_df['date_utc'] = pd.to_datetime(news_df['date']).dt.tz_convert('UTC').dt.tz_localize(None)
+        news_df['date_utc'] = pd.to_datetime(news_df['date'], errors='coerce', utc=True).dt.tz_localize(None)
+
+        total_date_nulls = news_df['date_utc'].isna().sum()
+        if total_date_nulls > 0:
+            logger.warning(f"Date is missing for {total_date_nulls} records, dropping the records.")
+
+        news_df = news_df.dropna(subset = ['date_utc'], ignore_index = True)
         
         news_df['year_utc'] = news_df['date_utc'].dt.year
         news_df['month_utc'] = news_df['date_utc'].dt.month
@@ -56,9 +61,9 @@ class CryptoNewsFetcher:
     
     def fetch_news(self, start_date, end_date):
         params = {
-            "token": self.api_key,
+            "token": self.API_KEY,
             "date": "-".join(
-                [pd.Timestamp(dt).strftime("%m%d%Y") for dt in [start_date, end_date]]
+                [pd.Timestamp(dt, tz='America/New_York').strftime("%m%d%Y") for dt in [start_date, end_date]]
             ),
             "tickers": "BTC",
             "items": 100,
@@ -71,23 +76,26 @@ class CryptoNewsFetcher:
         }
 
         try:
+
+            logger.info(f"Fetching articles between {start_date} and {end_date}")
+            
             news = []
-            response = requests.get(self.base_url, params=params).json()
+            response = requests.get(self.BASE_URL, params=params).json()
 
             pages = range(1, response.get("total_pages", 1) + 1)
             for page in tqdm(pages, desc="Fetching news"):
                 if page > 1:
                     params["page"] = page
-                    response = requests.get(self.base_url, params=params).json()
+                    response = requests.get(self.BASE_URL, params=params).json()
                 data = response.get("data", [])
                 if not data:
                     break
                 news.extend(data)
                 time.sleep(0.5)
 
-            logger.info(f"Fetched {len(news)} articles")
-
             news_df = self._post_process_news(news)
+
+            logger.info(f"Fetched {len(news_df)} out of {len(news)} articles between {start_date} and {end_date}")
 
             return news_df
 

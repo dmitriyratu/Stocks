@@ -1,78 +1,94 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel, Field, constr, confloat
 
-# # News Data Structures
+# # NEWS DATA STRUCTURES
 
-# ## Article Output Categories
+# ## Enums for categorical features
 
 
 # +
 class EmotionCategory(Enum):
-    OPTIMISTIC = "optimistic"
-    FEARFUL = "fearful"
-    CONFIDENT = "confident"
-    UNCERTAIN = "uncertain"
-    NEUTRAL = "neutral"
+    OPTIMISTIC = "Optimistic"
+    FEARFUL = "Fearful"
+    CONFIDENT = "Confident"
+    UNCERTAIN = "Uncertain"
+    NEUTRAL = "Neutral"
 
 
-class BullishBearish(Enum):
-    BULLISH = "bullish"
-    BEARISH = "bearish"
-    NEUTRAL = "neutral"
+class EventCategory(Enum):
+    REGULATION = "Regulation"
+    ADOPTION = "Adoption"
+    SECURITY = "Security"
+    TECHNOLOGY = "Technology"
+    MACRO = "Macro"
+    OTHER = "Other"
 
+class PriceDirection(Enum):
+    UP = "Upward"
+    DOWN = "Downward"
+    NEUTRAL = "Neutral"
 
-class ImpactLikelihood(Enum):
-    HIGH = "High"
-    MEDIUM = "Medium"
-    LOW = "Low"
-
-
-class Timeframe(Enum):
-    IMMEDIATE = "immediate"
+class TimeFrame(Enum):
+    IMMEDIATE = "within 24 hours"
     WITHIN_A_WEEK = "within a week"
     LONG_TERM = "long-term"
 
 
-# +
-@dataclass
-class SentimentAnalysis:
-    sentiment_score: float
-    emotion_category: EmotionCategory
-    bullish_bearish: BullishBearish
+# -
+
+class CategoricalFeatures(BaseModel):
+    emotion_category: EmotionCategory = Field(
+        description="The dominant emotional tone in the article (e.g., Optimistic for positive outlook, Fearful for concern about risks)"
+    )
+    event_category: List[EventCategory] = Field(
+        description="Categories of events discussed (e.g., Regulation for policy changes, Adoption for market acceptance)"
+    )
+    timeframe_category: TimeFrame = Field(
+        description="Expected timeframe for impact (24h, week, or long-term)"
+    )
+    price_direction_category: PriceDirection = Field(
+        description="Expected direction of price movement (Upward, Downward, or Neutral)"
+    )
 
 
-@dataclass
-class ImpactAssessment:
-    impact_likelihood: ImpactLikelihood
-    timeframe_of_impact: Timeframe
+# ## Continuous Features
+
+class ContinuousFeatures(BaseModel):
+    positive: confloat(ge=0.0, le=1.0) = Field(description="Positive sentiment score (positive + negative + neutral = 1)")
+    negative: confloat(ge=0.0, le=1.0) = Field(description="Negative sentiment score (positive + negative + neutral = 1)")
+    neutral: confloat(ge=0.0, le=1.0) = Field(description="Neutral sentiment score (positive + negative + neutral = 1)")
+    emotion_intensity: confloat(ge=0.0, le=1.0) = Field(description="Intensity of the emotion (0: no emotion, 1: extremely emotional)")
+    market_alignment: confloat(ge=0.0, le=1.0) = Field(description="How aligned with current market trends (0: opposed, 1: fully aligned)")
+    impact_magnitude: confloat(ge=0.0, le=1.0) = Field(description="Magnitude of potential impact (0: no impact, 1: maximum impact)")
+    trend_alignment_score: confloat(ge=0.0, le=1.0) = Field(description="Alignment with existing trends (0: misaligned, 1: fully aligned)")
+    credibility_score: confloat(ge=0.0, le=1.0) = Field(description="Credibility of the information (0: not credible, 1: highly credible)")
+    virality_score: confloat(ge=0.0, le=1.0) = Field(description="Likelihood of viral spread (0: unlikely, 1: highly viral)")
+    event_relevance: confloat(ge=0.0, le=1.0) = Field(description="Relevance to Bitcoin price movement (0: irrelevant, 1: highly relevant)")
+    confidence_score: confloat(ge=0.0, le=1.0) = Field(description="Model's confidence in analysis (0: not confident, 1: highly confident)")
 
 
-@dataclass
-class FreeText:
-    llm_reasoning: str
+# ## Free Text Features
 
+class ArticleTextFields(BaseModel):
+    key_topics: List[str] = Field(description="Main topics/entities discussed in the article")
+    free_text_summary: str = Field(description="Summarize the main points and implications of the article")
+    explain_reasoning_summary: str = Field(description="Explain the reasoning behind the analysis and predictions")
+    historical_analogy: Optional[str] = Field(description="Provide a historical analogy where similar events influenced the market")
+
+
+
+# ## Full Article Analysis
 
 @dataclass
 class ArticleAnalysis:
-    sentiment: SentimentAnalysis
-    impact: ImpactAssessment
-    free_text: FreeText
+    categorical: CategoricalFeatures
+    continuous: ContinuousFeatures
+    text_content: ArticleTextFields
 
 
-# -
-# # LLM Data Structure
-
-
-@dataclass
-class LLMConfig:
-    model_name: str
-    temperature: float
-    max_tokens: Optional[int]
-    timeout_seconds: int
-
-
-# # News Scraping
+# # News Processing
 
 @dataclass
 class TimeoutConfig:

@@ -155,3 +155,4 @@ dmypy.json
 cython_debug/
 
 *.parquet
+*delta_log*
