@@ -46,62 +46,17 @@ with tqdm(total=len(urls)) as pbar:
 # -
 df = pd.DataFrame(all_results)
 
+df[~df['success']]
+
+news_metadata
 
 
 
 
 
 
-df['error'].dropna().str.split(':').map(lambda x: x[0]).value_counts()
 
 
-
-
-
-# +
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
-
-
-def test_proxy(proxy):
-    test_url = 'https://httpbin.org/ip'
-    try:
-        response = requests.get(
-            test_url, proxies={'http': proxy, 'https': proxy}, timeout=5
-        )
-        if response.status_code == 200:
-            print(f"✅ Proxy Working: {proxy} - IP: {response.json()['origin']}")
-            return proxy
-    except Exception as e:
-        print(f"❌ Proxy Failed: {proxy} - {str(e)}")
-    return None
-
-# Validate proxies in parallel
-def validate_proxies(proxies, target):
-    working_proxies = []
-    stop_flag = False
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_proxy = {executor.submit(test_proxy, proxy): proxy for proxy in proxies}
-
-        for future in as_completed(future_to_proxy):
-            if stop_flag:
-                future.cancel()
-                continue
-            
-            proxy = future.result()
-            if proxy:
-                working_proxies.append(proxy)
-                
-            if len(working_proxies) >= target:
-                print(f"\n🎯 Target of {target} working proxies reached. Stopping early.")
-                return working_proxies
-    
-    print(f"\n🔍 Found {len(working_proxies)} working proxies.")
-    return working_proxies
-
-
-# -
 
 working_proxy_list = validate_proxies(proxy_list, 10)
 

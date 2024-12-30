@@ -13,10 +13,11 @@ import winreg
 import pyprojroot
 from pathlib import Path
 import random
+import time
 from bs4 import BeautifulSoup
+from http import HTTPStatus
 
 from logger_config import setup_logger
-import dataclass.data_structures as ds
 
 log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("ScapeNewsURLs", log_file)
@@ -26,14 +27,17 @@ logger = setup_logger("ScapeNewsURLs", log_file)
 class ScrapingResult:
     """Result container for a scraping attempt"""
     url: str
-    content: Optional[str] = None
+    full_text: Optional[str] = None
     status_code: Optional[int] = None
     error: Optional[str] = None
     success: bool = False
+    elapsed_time: float = 0
 
 
 class PowerScraper:
+    
     DEFAULT_CHROME_VERSION = 119 
+    DEFAULT_TIMEOUT = 15
 
     def __init__(self):
         """Initialize scraper with dynamic worker count based on available memory"""
@@ -43,6 +47,8 @@ class PowerScraper:
         
         self.scraper_pool = queue.Queue()
         self._initialize_scraper_pool()
+
+        self.headers = self._get_headers()
 
     def _get_chrome_version(self) -> int:
         """Get Chrome version or fallback to default"""
@@ -56,15 +62,13 @@ class PowerScraper:
     def _create_single_scraper(self) -> cloudscraper.CloudScraper:
         """Create a configured scraper instance with retry logic"""
 
-        browser_config = {
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True,
-            'version': self.chrome_version
-        }
-
         scraper = cloudscraper.create_scraper(
-            browser=browser_config,
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True,
+                'version': self.chrome_version
+            },
             interpreter='nodejs',
             doubleDown=True,
             allow_brotli=False,
@@ -102,57 +106,51 @@ class PowerScraper:
 
     def _extract_text(self, html: str) -> str:
         """Extract clean text from HTML"""
-        return trafilatura.extract(
-            html,
-            include_comments=False,
-            include_tables=False,
-            include_links=False,
-            no_fallback=False,
-        )
+        return 
     
     def scrape_url(self, url: str) -> ScrapingResult:
         """Scrape a single URL and return the result"""
+        start_time = time.perf_counter()
         scraper = self.scraper_pool.get()
         result = ScrapingResult(url=url)
         
         try:
-            response = scraper.get(url, headers=self._get_headers(), timeout=15)
+            response = scraper.get(url, headers=self.headers, timeout=self.DEFAULT_TIMEOUT)
 
             response.raise_for_status()
 
-            # Persist session cookies dynamically
             scraper.cookies.update(response.cookies)     
             
-            # Extract content and update result
             response.encoding = response.apparent_encoding
             result.status_code = response.status_code
             
             if response.text:
-                result.content = self._extract_text(response.text)
-                result.success = bool(result.content)
+                result.full_text = trafilatura.extract(
+                    response.text,
+                    include_comments=False,
+                    include_tables=False,
+                    include_links=False,
+                    no_fallback=False,
+                )
+                result.success = bool(result.full_text)
             else:
                 result.error = "empty response"
             
+        except requests.exceptions.HTTPError as e:
+            result.error = str(e) 
+            result.status_code = e.response.status_code
+        except requests.exceptions.RequestException as e:
+            result.error = str(e)
+            result.status_code = 503
         except Exception as e:
             result.error = str(e)
-            
+            result.status_code = 500            
         finally:
+            result.elapsed_time = time.perf_counter() - start_time
             self.scraper_pool.put(scraper)
             
         return result
 
-
-    # def scrape_urls(self, urls: List[str]) -> List[ScrapingResult]:
-    #     """Scrape multiple URLs, maintaining input order"""
-    #     try:
-    #         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-    #             results = list(executor.map(self.scrape_url, urls))
-    #         return results
-    #     finally:
-    #         while not self.scraper_pool.empty():
-    #             scraper = self.scraper_pool.get()
-    #             scraper.close()
-    #         self._initialize_scraper_pool()
 
     def scrape_urls(self, urls: List[str]) -> List[ScrapingResult]:
         """Scrape URLs maintaining input order with per-URL timeout"""
@@ -162,20 +160,17 @@ class PowerScraper:
             futures = {executor.submit(self.scrape_url, url): i for i, url in enumerate(urls)}
             for future in as_completed(futures):
                 try:
-                    results[futures[future]] = future.result(timeout=15)
-                except (TimeoutError, Exception) as e:
+                    results[futures[future]] = future.result(timeout=self.DEFAULT_TIMEOUT)
+                except Exception as e:
                     results[futures[future]].error = f"Error: {str(e)}"
         
         return results
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.cleanup()
+    def __enter__(self): return self
+        
+    def __exit__(self, *_): self.cleanup()
 
     def cleanup(self):
         """Clean up resources"""
         while not self.scraper_pool.empty():
-            scraper = self.scraper_pool.get()
-            scraper.close()
+            self.scraper_pool.get().close()
