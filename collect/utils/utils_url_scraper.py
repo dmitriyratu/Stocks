@@ -1,244 +1,181 @@
-import time
-import random
-from typing import Tuple, List, Optional
-from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
-from threading import Lock
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Optional, Dict
 import cloudscraper
+import psutil
+from dataclasses import dataclass
+import queue
 from fake_useragent import UserAgent
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import undetected_chromedriver as uc
-import trafilatura
-from logger_config import setup_logger
-import winreg
-from contextlib import contextmanager
+from requests.adapters import HTTPAdapter
 import requests
-from pathlib import Path
+from urllib3.util import Retry
+import trafilatura
+import winreg
 import pyprojroot
-import multiprocessing
+from pathlib import Path
+import random
+from bs4 import BeautifulSoup
+
+from logger_config import setup_logger
 import dataclass.data_structures as ds
-from tqdm.notebook import tqdm
-from textblob import TextBlob
-import gc
-from config import constants
 
 log_file = pyprojroot.here() / Path("logs/crypto_news.log")
 logger = setup_logger("ScapeNewsURLs", log_file)
 
 
-class WebDriverPool:
-    """A thread-safe pool for managing Selenium WebDriver instances."""
-    def __init__(self, size: int, chrome_version: int):
-        self.size = size
-        self.pool = Queue(maxsize=size)
-        self.lock = Lock()
-        for _ in range(size):
-            self.pool.put(self._create_driver(chrome_version))
-
-    def _create_driver(self, chrome_version: int):
-        options = uc.ChromeOptions()
-        
-        # Basic required options
-        options.add_argument('--headless=new')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        
-        # Anti-detection options
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument(f'--user-agent={UserAgent().random}')
-        options.add_argument('--enable-cookies')
-        options.add_argument('--enable-javascript')
-        options.add_argument('--start-maximized')
-        
-        driver = uc.Chrome(version_main=chrome_version, options=options)
-        
-        # Set timeouts using centralized config
-        driver.set_page_load_timeout(ds.TimeoutConfig.PAGE_LOAD)
-        driver.set_script_timeout(ds.TimeoutConfig.SCRIPT)
-        driver.implicitly_wait(ds.TimeoutConfig.IMPLICIT_WAIT)
-        
-        driver.command_executor._conn.timeout = ds.TimeoutConfig.COMMAND
-        driver.command_executor._conn.read_timeout = ds.TimeoutConfig.COMMAND
-        
-        driver.execute_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-        """)
-        
-        return driver
-
-    def get_driver(self):
-        with self.lock:
-            return self.pool.get()
-
-    def release_driver(self, driver):
-        with self.lock:
-            self.pool.put(driver)
-
-    def cleanup(self):
-        while not self.pool.empty():
-            driver = self.pool.get_nowait()
-            driver.quit()
-
-    @contextmanager
-    def driver_context(self):
-        driver = self.get_driver()
-        try:
-            yield driver
-        finally:
-            self.release_driver(driver)
+@dataclass
+class ScrapingResult:
+    """Result container for a scraping attempt"""
+    url: str
+    content: Optional[str] = None
+    status_code: Optional[int] = None
+    error: Optional[str] = None
+    success: bool = False
 
 
 class PowerScraper:
-    """High-performance scraper with persistent reusable resources."""
-
-    RETRY_PROMPTS = [
-        r"verifying you are human",
-        r"please verify you are a human",
-        r"captcha required",
-    ]
-
-    EXIT_PROMPTS = [
-        r"free subscription for",
-        r"page not found",
-        
-    ]
+    DEFAULT_CHROME_VERSION = 119 
 
     def __init__(self):
-        self.chrome_version = self.get_chrome_version()
-        self.driver_pool = WebDriverPool(
-            size = min(multiprocessing.cpu_count() * 2, 8), 
-            chrome_version=self.chrome_version
-        )
-        self.scraper, self.headers = self.setup_cloudscraper()
-
+        """Initialize scraper with dynamic worker count based on available memory"""
+        self.chrome_version = self._get_chrome_version()
+        available_memory = psutil.virtual_memory().available / (1024 * 1024)
+        self.max_workers = min(int(available_memory // 500), 16)
         
-    def get_chrome_version(self) -> int:
-        """Detect the installed Chrome version dynamically."""
+        self.scraper_pool = queue.Queue()
+        self._initialize_scraper_pool()
+
+    def _get_chrome_version(self) -> int:
+        """Get Chrome version or fallback to default"""
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Google\Chrome\BLBeacon")
             version = winreg.QueryValueEx(key, "version")[0].split(".")[0]
-            logger.info(f'Using winreg Chrome Version {version}')
             return int(version)
-        except Exception as e:
-            pass
+        except:
+            return self.DEFAULT_CHROME_VERSION
 
-        try:
-            response = requests.get("https://chromedriver.storage.googleapis.com/LATEST_RELEASE", timeout=10)
-            version = response.text.strip().split(".")[0]
-            logger.info(f'Using Web Chrome Version {version}')            
-            return int(version)
-        except Exception as e:
-            version = 119
-            logger.info(f'Using Web Chrome Version {version}') 
-            return int(version)
+    def _create_single_scraper(self) -> cloudscraper.CloudScraper:
+        """Create a configured scraper instance with retry logic"""
 
-    def setup_cloudscraper(self) -> Tuple[cloudscraper.CloudScraper, dict]:
-        """Set up Cloudscraper with connection pooling and dynamic headers."""
+        browser_config = {
+            'browser': 'chrome',
+            'platform': 'windows',
+            'desktop': True,
+            'version': self.chrome_version
+        }
+
         scraper = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'mobile': False,
-                'desktop': True,
-            },
+            browser=browser_config,
+            interpreter='nodejs',
+            doubleDown=True,
+            allow_brotli=False,
+            delay=10,
         )
-        adapter = requests.adapters.HTTPAdapter(pool_connections=self.driver_pool.size, pool_maxsize=self.driver_pool.size)
-        scraper.mount('http://', adapter)
-        scraper.mount('https://', adapter)
+
+        return scraper
+
+    def _get_headers(self) -> Dict[str, str]:
+        """Get enhanced headers that better mimic real browsers"""
+
+        user_agent = UserAgent().chrome
+        accept_encodings = random.choice(["gzip, deflate", "gzip"])
+        languages = random.choice(["en-US,en;q=0.9", "en-GB,en;q=0.8", "en,en;q=0.7"])
 
         headers = {
-            'User-Agent': UserAgent().random,
-            'sec-ch-ua': f'"Google Chrome";v="{self.chrome_version}"',
-            'sec-ch-ua-platform': 'Windows',
-            'sec-ch-ua-mobile': '?0',
+            'User-Agent': user_agent,
+            'sec-ch-ua': f'"Google Chrome";v="{self.chrome_version}", "Not;A=Brand";v="99"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',            
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Encoding': 'gzip, deflate',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Encoding': accept_encodings,
+            'Accept-Language': languages,
             'DNT': '1',
+            'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
         }
-        return scraper, headers
 
-    def fetch(self, url: str, reliable: bool = False) -> Optional[str]:
-        """Fetch content using Cloudscraper or WebDriver."""
+        return headers
+
+    def _initialize_scraper_pool(self):
+        """Fill the scraper pool"""
+        for _ in range(self.max_workers):
+            self.scraper_pool.put(self._create_single_scraper())
+
+    def _extract_text(self, html: str) -> str:
+        """Extract clean text from HTML"""
+        return trafilatura.extract(
+            html,
+            include_comments=False,
+            include_tables=False,
+            include_links=False,
+            no_fallback=False,
+        )
+    
+    def scrape_url(self, url: str) -> ScrapingResult:
+        """Scrape a single URL and return the result"""
+        scraper = self.scraper_pool.get()
+        result = ScrapingResult(url=url)
         
         try:
-            
-            text = None
-            if not reliable:
-                response = self.scraper.get(
-                    url, headers=self.headers, 
-                    timeout=(ds.TimeoutConfig.CONNECTION, ds.TimeoutConfig.READ)
-                )
-                if response.status_code == 200:
-                    response.encoding = response.apparent_encoding
-                    text = response.text
-            else:
-                with self.driver_pool.driver_context() as driver:
-                    driver.get(url)                 
-                    if any(rp in driver.page_source.lower() for rp in self.RETRY_PROMPTS):
-                        time.sleep(ds.TimeoutConfig.VERIFICATION_SLEEP)
-                        WebDriverWait(driver, ds.TimeoutConfig.VERIFICATION_WAIT).until(
-                            EC.presence_of_element_located((By.XPATH, '//body'))
-                        )
-                    text = driver.page_source
-                    if any(fp in text.lower() for fp in self.RETRY_PROMPTS):
-                        text = None
+            response = scraper.get(url, headers=self._get_headers(), timeout=15)
 
+            response.raise_for_status()
+
+            # Persist session cookies dynamically
+            scraper.cookies.update(response.cookies)     
             
+            # Extract content and update result
+            response.encoding = response.apparent_encoding
+            result.status_code = response.status_code
             
-            return text
+            if response.text:
+                result.content = self._extract_text(response.text)
+                result.success = bool(result.content)
+            else:
+                result.error = "empty response"
             
         except Exception as e:
-            logger.debug(f"Fetch error for {url} (reliable={reliable}): {e}")
-            return None
+            result.error = str(e)
+            
+        finally:
+            self.scraper_pool.put(scraper)
+            
+        return result
 
 
-    def scrape_url(self, url: str) -> Tuple[str, Optional[str], Optional[str], Optional[float]]:
-        """Smart scraping with fast method fallback to reliable method."""
-        for method, reliable in [("fast", False), ("reliable", True)]:
-            try:
-                t0 = time.perf_counter()
-                content = self.fetch(url, reliable=reliable)
-                elapsed_time = time.perf_counter() - t0
-                if content:
-                    text = trafilatura.extract(
-                        content,
-                        include_comments=False,
-                        include_tables=False,
-                        include_links=False,
-                        no_fallback=False,
-                    )
-                    text_size = len(TextBlob(text).words)
-                    if text_size >= constants.MINIMUM_ARTICLE_WORDS:
-                        if text_size >= 100 or all([p not in text.lower() for p in self.EXIT_PROMPTS]): 
-                            return url, text, text_size, method, elapsed_time
-            except Exception as e:
-                logger.debug(f"Scraping error for {url} using {method}: {e}")
-    
-        return url, None, None, None, None
+    # def scrape_urls(self, urls: List[str]) -> List[ScrapingResult]:
+    #     """Scrape multiple URLs, maintaining input order"""
+    #     try:
+    #         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+    #             results = list(executor.map(self.scrape_url, urls))
+    #         return results
+    #     finally:
+    #         while not self.scraper_pool.empty():
+    #             scraper = self.scraper_pool.get()
+    #             scraper.close()
+    #         self._initialize_scraper_pool()
 
-    def scrape_urls(self, urls: List[str]) -> List[Tuple[Optional[str], Optional[str], Optional[float]]]:
-        """Scrape multiple URLs in parallel with progress tracking."""
-        with ThreadPoolExecutor(max_workers=self.driver_pool.size) as executor:
-            return list(executor.map(self.scrape_url, urls))
-
-    def refresh_driver_pool(self):
-        """Refresh the WebDriver pool."""
-        gc.collect()
-        self.driver_pool.cleanup()
-        self.driver_pool = WebDriverPool(size=self.driver_pool.size, chrome_version=self.chrome_version)
+    def scrape_urls(self, urls: List[str]) -> List[ScrapingResult]:
+        """Scrape URLs maintaining input order with per-URL timeout"""
+        results = [ScrapingResult(url=url) for url in urls]
         
-    def close(self):
-        self.driver_pool.cleanup()
-        gc.collect()
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(self.scrape_url, url): i for i, url in enumerate(urls)}
+            for future in as_completed(futures):
+                try:
+                    results[futures[future]] = future.result(timeout=15)
+                except (TimeoutError, Exception) as e:
+                    results[futures[future]].error = f"Error: {str(e)}"
+        
+        return results
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
+
+    def cleanup(self):
+        """Clean up resources"""
+        while not self.scraper_pool.empty():
+            scraper = self.scraper_pool.get()
+            scraper.close()
