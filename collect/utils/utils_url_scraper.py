@@ -26,7 +26,7 @@ logger = setup_logger("ScapeNewsURLs", log_file)
 @dataclass
 class ScrapingResult:
     """Result container for a scraping attempt"""
-    url: str
+    news_url: str
     full_text: Optional[str] = None
     status_code: Optional[int] = None
     error: Optional[str] = None
@@ -89,7 +89,7 @@ class PowerScraper:
             'sec-ch-ua': f'"Google Chrome";v="{self.chrome_version}", "Not;A=Brand";v="99"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Encoding': accept_encodings,
             'Accept-Language': languages,
             'DNT': '1',
@@ -108,14 +108,14 @@ class PowerScraper:
         """Extract clean text from HTML"""
         return 
     
-    def scrape_url(self, url: str) -> ScrapingResult:
+    def scrape_url(self, news_url: str) -> ScrapingResult:
         """Scrape a single URL and return the result"""
         start_time = time.perf_counter()
         scraper = self.scraper_pool.get()
-        result = ScrapingResult(url=url)
+        result = ScrapingResult(news_url=news_url)
         
         try:
-            response = scraper.get(url, headers=self.headers, timeout=self.DEFAULT_TIMEOUT)
+            response = scraper.get(news_url, headers=self.headers, timeout=self.DEFAULT_TIMEOUT)
 
             response.raise_for_status()
 
@@ -131,6 +131,7 @@ class PowerScraper:
                     include_tables=False,
                     include_links=False,
                     no_fallback=False,
+                    
                 )
                 result.success = bool(result.full_text)
             else:
@@ -154,7 +155,7 @@ class PowerScraper:
 
     def scrape_urls(self, urls: List[str]) -> List[ScrapingResult]:
         """Scrape URLs maintaining input order with per-URL timeout"""
-        results = [ScrapingResult(url=url) for url in urls]
+        results = [ScrapingResult(news_url=url) for url in urls]
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {executor.submit(self.scrape_url, url): i for i, url in enumerate(urls)}

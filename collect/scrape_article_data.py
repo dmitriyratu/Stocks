@@ -46,23 +46,37 @@ with tqdm(total=len(urls)) as pbar:
 # -
 df = pd.DataFrame(all_results)
 
-df[~df['success']]
+df
 
-news_metadata
+n = iter(range(len(df)))
+
+df.loc[i,:]
+
+# +
+# i = next(n)
+# print(
+#     df.loc[i,'news_url'],
+# )
+# display(
+#     df.loc[i,'full_text'],
+# )
+# -
 
 
 
 
 
 
+text = df.loc[i,'full_text']
+text
+
+clean_text(text)
+
+r"hello\'s'".replace(r"\'","'")
 
 
 
-working_proxy_list = validate_proxies(proxy_list, 10)
 
-len(working_proxy_list)
-
-len(validate_proxies(working_proxy_list, 10))
 
 # ### Persist Data
 
