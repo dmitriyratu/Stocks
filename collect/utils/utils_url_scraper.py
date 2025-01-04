@@ -7,14 +7,12 @@ import queue
 from fake_useragent import UserAgent
 from requests.adapters import HTTPAdapter
 import requests
-from urllib3.util import Retry
 import trafilatura
 import winreg
 import pyprojroot
 from pathlib import Path
 import random
 import time
-from bs4 import BeautifulSoup
 from http import HTTPStatus
 
 from logger_config import setup_logger

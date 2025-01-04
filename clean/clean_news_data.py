@@ -2,35 +2,62 @@ from pathlib import Path
 from deltalake import DeltaTable
 import pyprojroot
 import pandas as pd
-import cleantext
-from config import parameters, constants
-from transformers import GPT2TokenizerFast
 
-from clean.utils import utils_text_summarizer
-
-# # Init
-
-tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+from clean.utils.utils_text_summarizer import text_summarize
+from clean.utils.utils_text_post_processor import TextProcessor
+from clean.utils.utils_spam_detector import SpamDetector
+from config import constants
 
 # # Import News Data
 
-base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/raw_data/year_utc=2024/month_utc=12')
-news_metadata = DeltaTable(str(base_path)).to_pandas()
+base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/')
+dt = DeltaTable(str(base_path))
+filters = [
+    ('year_utc', '=', 2024),
+    ('month_utc', '=', 12),
+]
+news_metadata = dt.to_pyarrow_table(filters=filters).to_pandas()
 
-base_path = pyprojroot.here() / Path('data/news/BTC/scraped_url_data')
-news_articles = DeltaTable(str(base_path)).to_pandas()
+base_path = pyprojroot.here() / Path('data/news/BTC/scraped_data/')
+dt = DeltaTable(str(base_path))
+filters = [
+    ('year_utc', '=', 2024),
+    ('month_utc', '=', 12),
+]
+news_articles = dt.to_pyarrow_table(filters=filters).to_pandas()
 
 # ## Combine Data
 
 news_data = pd.merge(
     news_metadata,
     news_articles,
-    how = 'left'
+    how = 'left',
 )
+
+# # Preprocess Text
+
+tprocessor = TextProcessor()
+
+news_data['full_cleaned_text'] = news_data['full_text'].map(tprocessor.clean_text)
+news_data[['full_cleaned_text','error','spam_score']] = news_data.apply(lambda row: tprocessor.generate_curated_text(row['full_cleaned_text'], row['error']), axis=1).apply(pd.Series)
+news_data[['full_cleaned_word_count','full_cleaned_token_count']] = news_data['full_cleaned_text'].map(tprocessor.measure_text).apply(pd.Series)
 
 # # Feature Engineer
 
-# +
+mask = news_data['preview_word_count'].fillna(0).gt(news_data['full_cleaned_word_count'].fillna(0)) & news_data['preview_word_count'].ge(constants.MINIMUM_ARTICLE_WORDS)
+news_data['selected_text'] = news_data['preview_text'].where(mask, news_data['full_cleaned_text'])
+
+news_data['selected_text']
+
+news_data[['selected_word_count','selected_text_token_count']] = news_data['selected_text'].map(tprocessor.measure_text).apply(pd.Series)
+
+
+
+
+word_count
+word_count
+word_count
+# +word_count
 news_data[['selected_text', 'selected_text_size', 'imputed_text_flag']]  = news_data.apply(
     lambda x: (x['preview_text'], x['preview_text_size'], True) 
     if pd.isna(x['full_text']) and x['preview_text_size'] > constants.MINIMUM_ARTICLE_WORDS

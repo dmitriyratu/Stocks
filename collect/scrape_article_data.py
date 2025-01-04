@@ -16,8 +16,7 @@ base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/')
 dt = DeltaTable(str(base_path))
 filters = [
     ('year_utc', '=', 2024),
-    ('month_utc', '=', 12),
-    ('day_utc', '>=', 20),
+    ('month_utc', '=', 3),
 ]
 news_metadata = dt.to_pyarrow_table(filters=filters).to_pandas()
 
@@ -44,42 +43,14 @@ with tqdm(total=len(urls)) as pbar:
                 total=f"{total_success}/{len(all_results)} ({total_success/len(all_results)*100:.1f}%)"
             )
 # -
-df = pd.DataFrame(all_results)
+# ### Merge Data
 
-df
-
-n = iter(range(len(df)))
-
-df.loc[i,:]
-
-# +
-# i = next(n)
-# print(
-#     df.loc[i,'news_url'],
-# )
-# display(
-#     df.loc[i,'full_text'],
-# )
-# -
-
-
-
-
-
-
-text = df.loc[i,'full_text']
-text
-
-clean_text(text)
-
-r"hello\'s'".replace(r"\'","'")
-
-
-
-
+news_articles = pd.merge(
+    news_metadata[['news_id', 'news_url','date_utc','year_utc','month_utc','day_utc']],
+    pd.DataFrame(all_results), 
+    how = 'left'
+)
 
 # ### Persist Data
 
 persist_news(news_articles, path = 'data/news/BTC/scraped_data')
-
-

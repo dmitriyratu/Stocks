@@ -86,24 +86,3 @@ class ArticleAnalysis:
     categorical: CategoricalFeatures
     continuous: ContinuousFeatures
     text_content: ArticleTextFields
-
-
-# # News Processing
-
-@dataclass
-class TimeoutConfig:
-    """Centralized timeout configuration for scraping operations."""
-    # General timeouts
-    DEFAULT: int = 10
-    CONNECTION: int = 10 
-    READ: int = 12  
-    
-    # Selenium specific
-    PAGE_LOAD: int = 30
-    SCRIPT: int = 20 
-    IMPLICIT_WAIT: int = 7  
-    COMMAND: int = 15 
-    
-    # Cloudflare/verification specific
-    VERIFICATION_SLEEP: int = 8
-    VERIFICATION_WAIT: int = 15  

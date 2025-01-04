@@ -182,7 +182,7 @@ class WebDriverPool:
 class ScrapingResult(NamedTuple):
     news_url: str
     full_text: Optional[str]
-    full_text_size: Optional[int]
+    full_word_count: Optional[int]
     scrape_method: Optional[str]
     elapsed_time: Optional[float]
     scrape_status: str
@@ -383,13 +383,13 @@ class PowerScraper:
                 if not extracted_text:
                     continue
                     
-                text_size = len(TextBlob(extracted_text).words)
+                word_count = len(TextBlob(extracted_text).words)
     
-                if text_size < self.MIN_TEXT_LENGTH:
+                if word_count < self.MIN_TEXT_LENGTH:
                     return ScrapingResult(
                         news_url=url,
                         full_text=None,
-                        full_text_size=text_size,
+                        full_word_count=word_count,
                         scrape_method=method,
                         elapsed_time=elapsed_time,
                         scrape_status=status,
@@ -400,14 +400,14 @@ class PowerScraper:
                 spam_score = SpamDetector.get_score(extracted_text)
                 
                 if (
-                    text_size < self.SPAM_CHECK_LENGTH_THRESHOLD and
+                    word_count < self.SPAM_CHECK_LENGTH_THRESHOLD and
                     (spam_score > self.MAX_SPAM_SCORE or
                     any(p.search(extracted_text.lower()) for p in self.EXIT_PROMPTS))
                 ):
                     return ScrapingResult(
                         news_url=url,
                         full_text=None,
-                        full_text_size=text_size,
+                        full_word_count=word_count,
                         scrape_method=method,
                         elapsed_time=elapsed_time,
                         scrape_status=status,
@@ -418,7 +418,7 @@ class PowerScraper:
                 return ScrapingResult(
                     news_url=url,
                     full_text=extracted_text,
-                    full_text_size=text_size,
+                    full_word_count=word_count,
                     scrape_method=method,
                     elapsed_time=elapsed_time,
                     scrape_status=status,
@@ -435,7 +435,7 @@ class PowerScraper:
         return ScrapingResult(
             news_url=url,
             full_text=None,
-            full_text_size=None,
+            full_word_count=None,
             scrape_method=None,
             elapsed_time=None,
             scrape_status=status,

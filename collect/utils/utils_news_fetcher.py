@@ -7,7 +7,6 @@ import time
 from logger_config import setup_logger
 from pathlib import Path
 import pyprojroot
-from textblob import TextBlob
 
 load_dotenv()
 
@@ -50,11 +49,9 @@ class CryptoNewsFetcher:
         news_df['month_utc'] = news_df['date_utc'].dt.month
         news_df['day_utc'] = news_df['date_utc'].dt.day
 
-        news_df['preview_text_size'] = news_df['preview_text'].map(lambda text: len(TextBlob(text).words))
-
         columns = [
             'news_id', 'date', 'date_utc', 'year_utc', 'month_utc', 'day_utc', 'type', 'source_name', 'tickers',
-            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title_text', 'preview_text', 'preview_text_size'
+            'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title_text', 'preview_text'
         ]        
 
         return news_df[columns]

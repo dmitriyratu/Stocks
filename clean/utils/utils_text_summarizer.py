@@ -7,8 +7,7 @@ import math
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-
-def summarize(text:str, token_count:int) -> str:
+def text_summarize(text:str, token_count:int) -> str:
     """
     Summarizes text dynamically to meet max_tokens threshold.
     """
