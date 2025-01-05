@@ -16,7 +16,7 @@ base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/')
 dt = DeltaTable(str(base_path))
 filters = [
     ('year_utc', '=', 2024),
-    ('month_utc', '=', 3),
+    ('month_utc', '=', 2),
 ]
 news_metadata = dt.to_pyarrow_table(filters=filters).to_pandas()
 

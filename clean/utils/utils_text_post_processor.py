@@ -1,5 +1,5 @@
 from cleantext import clean
-from transformers import GPT2TokenizerFast
+import tiktoken
 from textblob import TextBlob
 import pandas as pd
 
@@ -11,7 +11,7 @@ class TextProcessor:
 
     def __init__(self):
         
-        self.tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
         self.spam_scorer = SpamDetector()
 
     def clean_text(self, text):
@@ -38,14 +38,7 @@ class TextProcessor:
                 
         word_count = len(TextBlob(text).words)
         
-        token_count = len(
-            self.tokenizer.encode(
-                text, 
-                add_special_tokens=False, 
-                truncation = False, 
-                verbose=False
-            )
-        )
+        token_count = len(self.tokenizer.encode(text))
 
         return word_count, token_count
 
