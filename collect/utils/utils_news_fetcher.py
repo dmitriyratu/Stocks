@@ -74,7 +74,7 @@ class CryptoNewsFetcher:
 
         try:
 
-            logger.info(f"Fetching articles between {start_date} and {end_date}")
+            logger.info(f"Fetching articles between {start_date.date()} and {end_date.date()}")
             
             news = []
             response = requests.get(self.BASE_URL, params=params).json()
@@ -92,7 +92,7 @@ class CryptoNewsFetcher:
 
             news_df = self._post_process_news(news)
 
-            logger.info(f"Fetched {len(news_df)} out of {len(news)} articles between {start_date} and {end_date}")
+            logger.info(f"Fetched {len(news_df)} out of {len(news)} articles between {start_date.date()} and {end_date.date()}")
 
             return news_df
 

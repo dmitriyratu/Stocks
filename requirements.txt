@@ -7,3 +7,6 @@ textblob==0.18.0.post0
 transformers==4.47.0
 ipywidgets==8.1.5
 torch-directml==0.2.5.dev240914
+dagster==1.9.7
+dagit==1.9.7
+dagster-pandas==0.25.7

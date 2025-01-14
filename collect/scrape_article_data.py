@@ -15,8 +15,8 @@ from collect.utils.utils_news_persist import persist_news
 base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/')
 dt = DeltaTable(str(base_path))
 filters = [
-    ('year_utc', '=', 2024),
-    ('month_utc', '=', 2),
+    ('year_utc', '=', 2022),
+    ('month_utc', '=', 12),
 ]
 news_metadata = dt.to_pyarrow_table(filters=filters).to_pandas()
 
@@ -54,3 +54,7 @@ news_articles = pd.merge(
 # ### Persist Data
 
 persist_news(news_articles, path = 'data/news/BTC/scraped_data')
+
+
+
+
