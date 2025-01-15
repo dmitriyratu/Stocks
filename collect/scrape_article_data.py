@@ -8,17 +8,20 @@ from deltalake import DeltaTable
 
 
 from collect.utils.utils_url_scraper import PowerScraper
-from collect.utils.utils_news_persist import persist_news
+from collect.utils.utils_news_persist import DeltaLakeManager, TableNames
 
-# # Import News Data
+deltalake = DeltaLakeManager()
 
-base_path = pyprojroot.here() / Path('data/news/BTC/raw_data/')
-dt = DeltaTable(str(base_path))
-filters = [
-    ('year_utc', '=', 2022),
-    ('month_utc', '=', 12),
-]
-news_metadata = dt.to_pyarrow_table(filters=filters).to_pandas()
+# # Import Data
+
+# ## Import Status Data
+
+status_table = deltalake.read_table(table_name = TableNames.STATUS_ARTICLES, filters = [(TableNames.SCRAPED_ARTICLES.value, "=", False)])
+
+# ## Import News MetaData
+
+news_id_list = status_table['news_id'].tolist()
+news_metadata = deltalake.read_table(table_name = TableNames.METADATA_ARTICLES, filters = [("news_id", "in", news_id_list)])
 
 # # Scrape Article Text
 
@@ -43,7 +46,7 @@ with tqdm(total=len(urls)) as pbar:
                 total=f"{total_success}/{len(all_results)} ({total_success/len(all_results)*100:.1f}%)"
             )
 # -
-# ### Merge Data
+# ## Merge Data
 
 news_articles = pd.merge(
     news_metadata[['news_id', 'news_url','date_utc','year_utc','month_utc','day_utc']],
@@ -51,10 +54,19 @@ news_articles = pd.merge(
     how = 'left'
 )
 
-# ### Persist Data
+# # Persist Data
 
-persist_news(news_articles, path = 'data/news/BTC/scraped_data')
+# ## Scraped Data
 
+deltalake.write_table(
+    table_name = TableNames.SCRAPED_ARTICLES,
+    df = news_articles
+)
 
+# ## Status Data
 
-
+status_table.loc[table['news_id'].isin(news_id_list), TableNames.SCRAPED_ARTICLES.value] = True
+deltalake.write_table(
+    table_name = TableNames.STATUS_ARTICLES,
+    df = status_table
+)
