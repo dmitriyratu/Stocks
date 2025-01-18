@@ -9,16 +9,14 @@ from requests.adapters import HTTPAdapter
 import requests
 import trafilatura
 import winreg
-import pyprojroot
 from pathlib import Path
 import random
 import time
 from http import HTTPStatus
 
-from logger_config import setup_logger
+from src.core.logging.logger import setup_logger
 
-log_file = pyprojroot.here() / Path("logs/crypto_news.log")
-logger = setup_logger("ScapeNewsURLs", log_file)
+logger = setup_logger("ScapeNewsURLs", Path("crypto_news.log"))
 
 
 @dataclass

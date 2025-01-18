@@ -3,11 +3,13 @@ import json
 import os
 from typing import List
 
-import dataclass.data_structures as ds
 from dotenv import load_dotenv
 import openai
 from config import parameters
 # -
+
+from src.core.schemas import data_structures as ds
+from src.core.config import settings
 
 # # Setup
 

@@ -8,6 +8,7 @@ import yfinance as yf
 from logger_config import setup_logger
 from tqdm.autonotebook import tqdm
 
+
 # -
 
 

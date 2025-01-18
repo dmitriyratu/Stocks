@@ -1,7 +1,9 @@
 from transformers import GPT2TokenizerFast
 from clean import clean_news_data
 
-from model.utils import utils_call_llm, utils_message
+from src.core.storage.delta_lake import DeltaLakeManager, TableNames
+from src.model.utils.llm_client import LLMClient
+from src.model.utils.message_creator import BatchMessageCreator
 
 for _, article in clean_news_data.news_data.iterrows():
     break

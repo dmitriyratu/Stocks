@@ -3,9 +3,9 @@
 import json
 from typing import List, Dict, Tuple
 from transformers import GPT2TokenizerFast
-from config import parameters
 
-import dataclass.data_structures as ds
+from src.core.schemas import data_structures as ds
+from src.core.config import settings
 
 tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 

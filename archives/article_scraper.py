@@ -2,13 +2,13 @@ import pandas as pd
 from pathlib import Path
 from more_itertools import chunked
 from tqdm.notebook import tqdm
-from logger_config import setup_logger
 import pyprojroot
 from deltalake import DeltaTable
 
 
-from collect.utils.utils_url_scraper import PowerScraper
-from collect.utils.utils_news_persist import DeltaLakeManager, TableNames
+from src.core.storage.delta_lake import DeltaLakeManager, TableNames
+from src.collect.utils.article_scraper import PowerScraper
+from src.core.logging.logger import setup_logger
 
 deltalake = DeltaLakeManager()
 
@@ -16,11 +16,18 @@ deltalake = DeltaLakeManager()
 
 # ## Import Status Data
 
-status_table = deltalake.read_table(table_name = TableNames.STATUS_ARTICLES, filters = [(TableNames.SCRAPED_ARTICLES.value, "=", False)])
+status_table = deltalake.read_table(
+    table_name = TableNames.STATUS_ARTICLES, 
+    filters = [
+        (TableNames.METADATA_ARTICLES.value, "=", True),
+        (TableNames.SCRAPED_ARTICLES.value, "=", False),
+    ]
+)
+
+news_id_list = status_table['news_id'].tolist()
 
 # ## Import News MetaData
 
-news_id_list = status_table['news_id'].tolist()
 news_metadata = deltalake.read_table(table_name = TableNames.METADATA_ARTICLES, filters = [("news_id", "in", news_id_list)])
 
 # # Scrape Article Text
@@ -65,7 +72,7 @@ deltalake.write_table(
 
 # ## Status Data
 
-status_table.loc[table['news_id'].isin(news_id_list), TableNames.SCRAPED_ARTICLES.value] = True
+status_table.loc[status_table['news_id'].isin(news_id_list), TableNames.SCRAPED_ARTICLES.value] = True
 deltalake.write_table(
     table_name = TableNames.STATUS_ARTICLES,
     df = status_table

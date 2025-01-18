@@ -2,9 +2,11 @@ import numpy as np
 import tiktoken
 from sentence_transformers import SentenceTransformer, util
 from nltk.tokenize import sent_tokenize
-from config import constants
 import math
 import pandas as pd
+from typing import Optional
+
+from src.core.config import constants
 
 
 class TextSummarizer:
@@ -47,7 +49,7 @@ class TextSummarizer:
         
         return intro_scores, conclusion_scores
     
-    def text_summarize(self, text:str) -> str:
+    def text_summarize(self, text:str) -> Optional[str]:
         """
         Summarizes text dynamically to meet max_tokens threshold with position weighting.
         """
@@ -65,7 +67,7 @@ class TextSummarizer:
         sentences = sent_tokenize(text)
 
         if len(sentences) < self.WINDOW_SIZE:
-            return text[:max_tokens*4]
+            return None
         
         # Step 2: Generate embeddings and centrality scores
         centrality_scores = self._compute_hybrid_scores(sentences)
@@ -96,7 +98,12 @@ class TextSummarizer:
         # Step 7: Reassemble the summary in original order
         top_sentences = [sentences[i] for i in sorted(top_indices)]
         summary_text = ' '.join(top_sentences)
-        
+
+        # Step 8: If reduction in tokens was not achieved nullify the text
+        token_count = len(self.tokenizer.encode(summary_text))
+        if token_count > (max_tokens * 1.1):
+            return None
+
         return summary_text
 
     def _compute_hybrid_scores(self, sentences):

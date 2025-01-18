@@ -3,8 +3,8 @@ import tiktoken
 from textblob import TextBlob
 import pandas as pd
 
-from config import constants
-from clean.utils.utils_spam_detector import SpamDetector
+from src.core.config import constants
+from src.clean.utils.spam_detector import SpamDetector
 
 
 class TextProcessor:

@@ -4,14 +4,13 @@ import pandas as pd
 import requests
 from tqdm.autonotebook import tqdm
 import time
-from logger_config import setup_logger
 from pathlib import Path
-import pyprojroot
+
+from src.core.logging.logger import setup_logger
 
 load_dotenv()
 
-log_file = pyprojroot.here() / Path("logs/crypto_news.log")
-logger = setup_logger("GetCryptoNews", log_file)
+logger = setup_logger("GetCryptoNews", Path("crypto_news.log"))
 
 # # Import News
 
@@ -60,7 +59,7 @@ class CryptoNewsFetcher:
         params = {
             "token": self.API_KEY,
             "date": "-".join(
-                [pd.Timestamp(dt, tz='America/New_York').strftime("%m%d%Y") for dt in [start_date, end_date]]
+                [dt.strftime("%m%d%Y") for dt in [start_date, end_date]]
             ),
             "tickers": "BTC",
             "items": 100,

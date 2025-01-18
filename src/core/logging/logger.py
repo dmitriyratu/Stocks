@@ -1,20 +1,14 @@
 import logging
 import sys
+from pathlib import Path
+import pyprojroot
 
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 
-def setup_logger(name, log_file, level=logging.INFO):
+def setup_logger(name:str, log_file:Path, level:logging=logging.INFO):
     """
     Set up a logger with the specified name and integrate it with tqdm automatically.
-
-    Args:
-        name (str): Name of the logger.
-        log_file (Path): Path object for the log file.
-        level (int): Logging level (e.g., logging.INFO, logging.DEBUG).
-
-    Returns:
-        logging.Logger: Configured logger instance.
     """
     # Create a custom logger
     logger = logging.getLogger(name)
@@ -26,8 +20,9 @@ def setup_logger(name, log_file, level=logging.INFO):
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         # File handler to write logs to a file
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
+        log_file_path = pyprojroot.here() / Path("logs") / log_file
+        log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file_path)
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
