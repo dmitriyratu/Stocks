@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import numpy as np
 import requests
 from tqdm.autonotebook import tqdm
 import time
@@ -47,6 +48,9 @@ class CryptoNewsFetcher:
         news_df['year_utc'] = news_df['date_utc'].dt.year
         news_df['month_utc'] = news_df['date_utc'].dt.month
         news_df['day_utc'] = news_df['date_utc'].dt.day
+
+        news_df['tickers'] = news_df['tickers'].apply(np.asarray)
+        news_df['topics'] = news_df['topics'].apply(np.asarray)
 
         columns = [
             'news_id', 'date', 'date_utc', 'year_utc', 'month_utc', 'day_utc', 'type', 'source_name', 'tickers',

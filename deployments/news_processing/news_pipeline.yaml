@@ -1,0 +1,9 @@
+name: crypto_news_processing
+description: Unified deployment for both dev and prod environments
+flow_name: process_news
+schedule: null
+work_queue_name: default
+parameters:
+  environment: dev  # Default is "dev"; override for "prod" during runtime
+tags:
+  - unified
