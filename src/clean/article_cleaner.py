@@ -184,7 +184,6 @@ class ArticleCleanEndpoint:
             return {
                 "status": "success",
                 "articles_cleaned": len(cleaned_data),
-                "news_ids": news_id_list
             }
             
         except Exception as e:
