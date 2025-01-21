@@ -1,6 +1,7 @@
 from prefect import flow
 from typing import Dict
 from prefect.task_runners import ConcurrentTaskRunner
+from prefect.logging import get_run_logger
 
 from src.flows.news_processing.tasks import news_tasks
 
@@ -10,8 +11,12 @@ from src.flows.news_processing.tasks import news_tasks
     task_runner=ConcurrentTaskRunner(),
     description="Process crypto news from import to LLM analysis"
 )
-def process_news() -> Dict:
+def process_news(environment: str) -> Dict:
     """Main flow for complete news processing pipeline"""
+
+    logger = get_run_logger()
+
+    logger.info(f"Processing news in the {environment.upper()} environment.")
 
     import_result = news_tasks.import_news()
     scrape_result = news_tasks.scrape_articles(wait_for=[import_result])

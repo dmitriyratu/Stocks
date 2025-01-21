@@ -1,0 +1,22 @@
+prefect:
+  name: bitcoin-startup
+
+deployments:
+- name: crypto_news_processing
+  version:
+  tags:
+  - news
+  description: Processes crypto news
+  schedule: {}
+  entrypoint: src/flows/news_processing/pipelines/news_pipeline.py:process_news
+  parameters:
+    environment: dev
+  work_queue_name: default
+  work_pool:
+    name: default-process-pool
+    work_queue_name:
+    job_variables: {}
+  schedules: []
+  pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: C:\Users\dmitr\Projects\Stocks
