@@ -4,7 +4,7 @@ from textblob import TextBlob
 import pandas as pd
 
 from src.core.config import constants
-from src.clean.utils.spam_detector import SpamDetector
+from src.clean.news.utils.spam_detector import SpamDetector
 
 
 class TextProcessor:

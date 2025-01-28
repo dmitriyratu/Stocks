@@ -49,9 +49,6 @@ class CryptoNewsFetcher:
         news_df['month_utc'] = news_df['date_utc'].dt.month
         news_df['day_utc'] = news_df['date_utc'].dt.day
 
-        news_df['tickers'] = news_df['tickers'].apply(np.asarray)
-        news_df['topics'] = news_df['topics'].apply(np.asarray)
-
         columns = [
             'news_id', 'date', 'date_utc', 'year_utc', 'month_utc', 'day_utc', 'type', 'source_name', 'tickers',
             'topics', 'news_url', 'rank_score', 'news_api_sentiment', 'title_text', 'preview_text'

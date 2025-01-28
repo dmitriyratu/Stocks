@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import pandas as pd
 import pyarrow as pa
+import numpy as np
 from deltalake import DeltaTable, write_deltalake
 from pathlib import Path
 import pyprojroot
@@ -109,9 +110,16 @@ class DeltaLakeManager:
             logger.warning(f"Empty DataFrame provided for {table_name}, skipping persist")
             return
 
+        df = df.copy()
+
         table_config = self.table_schemas.get(table_name)
 
         logger.info(f"Table: {table_name} - Persisting data...")
+
+        types = (list, set, np.ndarray)
+        list_columns = df.columns[df.apply(lambda x: x.apply(lambda y: isinstance(y, types)).any())]
+        for column in list_columns:
+            df[column] = df[column].map(lambda x: list(x) if isinstance(x, types) else [])
         
         if not (table_config.base_path / '_delta_log').exists():
             self._create_table(table_config.base_path, df, table_config.partition_columns)

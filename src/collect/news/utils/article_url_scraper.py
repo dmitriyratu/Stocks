@@ -45,6 +45,7 @@ class PowerScraper:
         self._initialize_scraper_pool()
 
         self.headers = self._get_headers()
+        self.scraper_processes = set()
 
     def _get_chrome_version(self) -> int:
         """Get Chrome version or fallback to default"""
@@ -70,6 +71,9 @@ class PowerScraper:
             allow_brotli=False,
             delay=10,
         )
+
+        if hasattr(scraper, 'process'):
+            self.scraper_processes.add(scraper.process.pid)
 
         return scraper
 
@@ -165,7 +169,16 @@ class PowerScraper:
 
     def __enter__(self): return self
         
-    def __exit__(self, *_): self.cleanup()
+    def __exit__(self, *_):
+        try:
+            for pid in self.scraper_processes:
+                try:
+                    process = psutil.Process(pid)
+                    process.kill()
+                except:
+                    pass
+        finally:
+            self.cleanup()
 
     def cleanup(self):
         """Clean up resources"""

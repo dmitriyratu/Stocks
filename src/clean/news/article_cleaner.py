@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from src.core.storage.delta_lake import DeltaLakeManager, TableNames
-from src.clean.utils.text_summarizer import TextSummarizer
-from src.clean.utils.text_processor import TextProcessor
+from src.clean.news.utils.text_summarizer import TextSummarizer
+from src.clean.news.utils.text_processor import TextProcessor
 from src.core.config import constants
 from src.core.logging.logger import setup_logger
 

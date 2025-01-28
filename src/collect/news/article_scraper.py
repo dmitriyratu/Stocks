@@ -5,7 +5,7 @@ from tqdm.notebook import tqdm
 import pandas as pd
 
 from src.core.storage.delta_lake import DeltaLakeManager, TableNames
-from src.collect.utils.article_url_scraper import PowerScraper, ScrapingResult
+from src.collect.news.utils.article_url_scraper import PowerScraper, ScrapingResult
 from src.core.logging.logger import setup_logger
 
 logger = setup_logger("ArticleScrapeEndpoint", Path("crypto_news.log"))

@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from src.core.storage.delta_lake import DeltaLakeManager, TableNames
-from src.collect.utils.news_api_caller import CryptoNewsFetcher
+from src.collect.news.utils.news_api_caller import CryptoNewsFetcher
 from src.core.logging.logger import setup_logger
 
 logger = setup_logger("ImportNewsEndpoint", Path("crypto_news.log"))
@@ -16,6 +16,11 @@ class NewsImportEndpoint:
     def __init__(self):
         self.fetcher = CryptoNewsFetcher()
         self.deltalake = DeltaLakeManager()
+
+        last_fetch_date = self._get_last_fetch_date()
+        if last_fetch_date:
+            self.start_date = (last_fetch_date - timedelta(days=1))
+            self.end_date = pd.Timestamp.now(tz = 'US/Eastern')
         
     def _get_last_fetch_date(self) -> Optional[pd.Timestamp]:
         """Get the most recent date from existing data."""
@@ -61,33 +66,36 @@ class NewsImportEndpoint:
             logger.error(f"Error updating status table: {e}")
             raise
 
+    def _get_data(self) -> pd.DataFrame():
+        
+        logger.info(f"Fetching News...")
+        
+        # Fetch new data
+        news_metadata = self.fetcher.fetch_news(self.start_date, self.end_date)
+        
+        # Filter out existing articles
+        existing_articles = self.deltalake.read_table(
+            table_name=TableNames.METADATA_ARTICLES.value,
+            columns=['news_id']
+        )
+        news_metadata = news_metadata[
+            ~news_metadata['news_id'].isin(existing_articles['news_id'])
+        ]
+
+        return news_metadata
+
     def execute(self) -> dict:
         """Execute the news import process."""
         try:
-            last_fetch_date = self._get_last_fetch_date()
-            start_date = (last_fetch_date - timedelta(days=1))
-            end_date = pd.Timestamp.now(tz = 'US/Eastern')
-            
-            logger.info(f"Fetching News...")
-            
-            # Fetch new data
-            news_metadata = self.fetcher.fetch_news(start_date, end_date)
-            
-            # Filter out existing articles
-            existing_articles = self.deltalake.read_table(
-                table_name=TableNames.METADATA_ARTICLES.value,
-                columns=['news_id']
-            )
-            news_metadata = news_metadata[
-                ~news_metadata['news_id'].isin(existing_articles['news_id'])
-            ]
+
+            news_metadata = self._get_data()
             
             if news_metadata.empty:
                 logger.info("No new unique articles found.")
                 return {
                     "status": "success", 
                     "new_articles": 0,
-                    "date_range": f"{start_date.date()} to {end_date.date()}"
+                    "date_range": f"{self.start_date.date()} to {self.end_date.date()}"
                 }
             
             # Persist metadata
@@ -102,7 +110,7 @@ class NewsImportEndpoint:
             return {
                 "status": "success",
                 "new_articles": len(news_metadata),
-                "date_range": f"{start_date.date()} to {end_date.date()}"
+                "date_range": f"{self.start_date.date()} to {self.end_date.date()}"
             }
             
         except Exception as e:
